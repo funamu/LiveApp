@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>投げ銭テスト画面</title>
+  <style>
+    body { text-align: center; margin-top: 50px; font-family: sans-serif; }
+    button { font-size: 20px; padding: 15px 30px; cursor: pointer; background: #ff4757; color: white; border: none; border-radius: 5px; }
+    #effectArea { margin-top: 50px; font-size: 30px; color: #ffaa00; font-weight: bold; min-height: 50px; }
+  </style>
+</head>
+<body>
+  <h1>投げ銭（リアルタイム同期）テスト</h1>
+  
+  <button onclick="sendGift('🎁 500円のスーパーギフト')">ギフトを贈る！</button>
+
+  <div id="effectArea"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    // ボタンが押されたら動く処理
+    function sendGift(giftName) {
+      // サーバーに「send_gift」という名前でギフトの情報を送ります
+      socket.emit('send_gift', giftName);
+    }
+
+    // サーバーから「show_gift_effect（エフェクトを出して！）」という指示が来たら動く処理
+    socket.on('show_gift_effect', (giftName) => {
+      const effectArea = document.getElementById('effectArea');
+      // 画面に文字を表示します
+      effectArea.innerText = giftName + ' が飛んできました！！✨';
+
+      // 3秒（3000ミリ秒）後に文字を消して、元に戻します
+      setTimeout(() => {
+        effectArea.innerText = '';
+      }, 3000);
+    });
+  </script>
+</body>
+</html>
