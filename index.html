@@ -19,16 +19,16 @@
             align-items: center;
         }
 
-        /* ライブ配信画面の枠（スマホサイズを意識） */
+        /* ライブ配信画面の枠（スマホ表示に対応した絶対配置） */
         #app-container {
-            position: relative;
-            width: 100%;
-            max-width: 480px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
             height: 100vh;
+            height: 100dvh; /* スマホのアドレスバーの変化に対応する最新の高さ指定 */
             background: #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            overflow: hidden;
         }
 
         /* 背景のカメラ映像 */
