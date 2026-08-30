@@ -1,42 +1,209 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>投げ銭テスト画面</title>
-  <style>
-    body { text-align: center; margin-top: 50px; font-family: sans-serif; }
-    button { font-size: 20px; padding: 15px 30px; cursor: pointer; background: #ff4757; color: white; border: none; border-radius: 5px; }
-    #effectArea { margin-top: 50px; font-size: 30px; color: #ffaa00; font-weight: bold; min-height: 50px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ライブ配信プロトタイプ</title>
+    <!-- Socket.ioのライブラリ読み込み -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            font-family: sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* ライブ配信画面の枠（スマホサイズを意識） */
+        #app-container {
+            position: relative;
+            width: 100%;
+            max-width: 480px;
+            height: 100vh;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* 背景のカメラ映像 */
+        #camera-video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        /* 配信情報やUIのレイヤー（映像の上に重ねる） */
+        .overlay-layer {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            pointer-events: none; /* ボタン以外はタッチを透過させる */
+        }
+
+        /* ヘッダー部分（視聴者数など） */
+        .header {
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        }
+
+        .live-badge {
+            background: #ff2a5f;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+
+        /* 投げ銭ボタンエリア */
+        .footer {
+            padding: 20px;
+            display: flex;
+            justify-content: flex-end;
+            pointer-events: auto; /* ボタンはタップできるようにする */
+        }
+
+        .gift-btn {
+            background: linear-gradient(135deg, #ff2a5f, #ff7b00);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 42, 95, 0.4);
+            transition: transform 0.1s;
+        }
+
+        .gift-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 投げ銭エフェクト（画面中央にフワッと浮き出る） */
+        #effect-container {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            pointer-events: none;
+            text-align: center;
+            width: 100%;
+        }
+
+        .gift-effect-text {
+            font-size: 32px;
+            font-weight: 900;
+            color: #ffd700;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 20px #ff2a5f;
+            animation: popUp 1.5s ease-out forwards;
+        }
+
+        @keyframes popUp {
+            0% {
+                opacity: 0;
+                transform: scale(0.5) translateY(20px);
+            }
+            30% {
+                opacity: 1;
+                transform: scale(1.2) translateY(0);
+            }
+            70% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(1) translateY(-50px);
+            }
+        }
+    </style>
 </head>
 <body>
-  <h1>投げ銭（リアルタイム同期）テスト</h1>
-  
-  <button onclick="sendGift('🎁 500円のスーパーギフト')">ギフトを贈る！</button>
 
-  <div id="effectArea"></div>
+    <div id="app-container">
+        <!-- スマホのカメラ映像を表示するタグ -->
+        <video id="camera-video" autoplay playsinline muted></video>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
+        <!-- 配信画面のUI -->
+        <div class="overlay-layer">
+            <div class="header">
+                <span class="live-badge">LIVE</span>
+                <span>👤 3</span>
+            </div>
 
-    // ボタンが押されたら動く処理
-    function sendGift(giftName) {
-      // サーバーに「send_gift」という名前でギフトの情報を送ります
-      socket.emit('send_gift', giftName);
-    }
+            <!-- エフェクトが出る場所 -->
+            <div id="effect-container"></div>
 
-    // サーバーから「show_gift_effect（エフェクトを出して！）」という指示が来たら動く処理
-    socket.on('show_gift_effect', (giftName) => {
-      const effectArea = document.getElementById('effectArea');
-      // 画面に文字を表示します
-      effectArea.innerText = giftName + ' が飛んできました！！✨';
+            <div class="footer">
+                <button class="gift-btn" id="gift-trigger">🎁 ギフトを贈る</button>
+            </div>
+        </div>
+    </div>
 
-      // 3秒（3000ミリ秒）後に文字を消して、元に戻します
-      setTimeout(() => {
-        effectArea.innerText = '';
-      }, 3000);
-    });
-  </script>
+    <script>
+        const socket = io();
+
+        // 1. スマホやPCのカメラ映像を起動して背景に映す処理
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'user' }, // インカメラを優先
+                    audio: false 
+                });
+                const videoElement = document.getElementById('camera-video');
+                videoElement.srcObject = stream;
+            } catch (err) {
+                console.log("カメラの起動に失敗しました（PCの場合カメラがない等の理由）: ", err);
+            }
+        }
+        startCamera();
+
+        // 2. ギフトボタンを押したときの処理
+        document.getElementById('gift-trigger').addEventListener('click', () => {
+            // サーバーへ「ギフトが送られたよ」という合図を送る
+            socket.emit('send-gift', { userName: 'テストユーザー' });
+        });
+
+        // 3. サーバーから「ギフトが届いたよ」と教えられたときの処理
+        socket.on('receive-gift', (data) => {
+            showGiftEffect(data.userName);
+        });
+
+        // 画面にエフェクト文字を表示する関数
+        function showGiftEffect(userName) {
+            const container = document.getElementById('effect-container');
+            
+            const div = document.createElement('div');
+            div.className = 'gift-effect-text';
+            div.innerText = `🎉 ${userName}さんがギフトを贈りました！`;
+            
+            container.appendChild(div);
+
+            // アニメーションが終わったらHTML要素を削除する
+            setTimeout(() => {
+                div.remove();
+            }, 1500);
+        }
+    </script>
 </body>
 </html>

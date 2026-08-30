@@ -1,31 +1,28 @@
 const express = require('express');
 const http = require('http');
-const { Server } = require("socket.io");
+const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-// ここでSocket.io（高速トランシーバー）のスイッチを入れます
 const io = new Server(server);
 
-// 誰かがURLにアクセスしてきたら、「index.html（画面）」を渡してあげます
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/index.html');
-});
+// 静ファイル（HTMLなど）を公開する設定
+app.use(express.static(__dirname));
 
-// 視聴者が新しく画面を開いたときの処理
 io.on('connection', (socket) => {
-  console.log('新しいユーザーが画面を開きました！');
+    console.log('ユーザーが接続しました');
 
-  // 視聴者の画面から「ギフトボタンが押された！（send_gift）」という連絡を受け取ります
-  socket.on('send_gift', (giftName) => {
-    console.log('サーバー側で受信: ' + giftName);
-    
-    // 今つながっている【全員の画面】に向けて、「エフェクトを出して！（show_gift_effect）」と一斉送信します
-    io.emit('show_gift_effect', giftName);
-  });
+    // クライアントからギフト通知を受け取ったら、全員に共有する
+    socket.on('send-gift', (data) => {
+        io.emit('receive-gift', data);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('ユーザーが切断しました');
+    });
 });
 
-// サーバーを起動して待機します（ポート番号3000番という場所を使います）
-server.listen(3000, () => {
-  console.log('サーバーが起動しました。ブラウザで http://localhost:3000 を開いてください。');
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
