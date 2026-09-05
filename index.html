@@ -2,9 +2,8 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ライブ配信プロトタイプ</title>
-    <!-- Socket.ioのライブラリ読み込み -->
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body {
@@ -14,24 +13,26 @@
             font-family: sans-serif;
             overflow: hidden;
             height: 100vh;
+            height: 100dvh;
             display: flex;
             justify-content: center;
             align-items: center;
         }
 
-        /* ライブ配信画面の枠（スマホ表示に対応した絶対配置） */
         #app-container {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            height: 100dvh; /* スマホのアドレスバーの変化に対応する最新の高さ指定 */
+            height: 100dvh;
             background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
             overflow: hidden;
         }
 
-        /* 背景のカメラ映像 */
         #camera-video {
             position: absolute;
             top: 0;
@@ -40,9 +41,42 @@
             height: 100%;
             object-fit: cover;
             z-index: 1;
+            background: #111;
         }
 
-        /* 配信情報やUIのレイヤー（映像の上に重ねる） */
+        #role-select-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            color: white;
+        }
+
+        .role-btn {
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            color: white;
+            border: none;
+            padding: 18px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 114, 255, 0.4);
+        }
+
+        .role-btn.viewer {
+            background: linear-gradient(135deg, #2af598, #009efd);
+            box-shadow: 0 4px 15px rgba(42, 245, 152, 0.4);
+        }
+
         .overlay-layer {
             position: relative;
             z-index: 2;
@@ -51,10 +85,9 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            pointer-events: none; /* ボタン以外はタッチを透過させる */
+            pointer-events: none;
         }
 
-        /* ヘッダー部分（視聴者数など） */
         .header {
             padding: 15px;
             display: flex;
@@ -73,16 +106,11 @@
             letter-spacing: 1px;
         }
 
-        /* 投げ銭ボタンエリア */
         .footer {
-            position: absolute; /* 画面に対して絶対位置で固定 */
-            bottom: 20px;       /* 画面の一番下から20pxの場所に配置 */
-            right: 20px;        /* 画面の右側から20pxの場所に配置 */
-            width: auto;        /* 幅はボタンの大きさに合わせる */
+            padding: 20px;
             display: flex;
             justify-content: flex-end;
-            pointer-events: auto; /* ボタンはタップできるようにする */
-            z-index: 5;         /* 映像や他の要素の上に必ず表示させる */
+            pointer-events: auto;
         }
 
         .gift-btn {
@@ -95,14 +123,8 @@
             border-radius: 50px;
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(255, 42, 95, 0.4);
-            transition: transform 0.1s;
         }
 
-        .gift-btn:active {
-            transform: scale(0.95);
-        }
-
-        /* 投げ銭エフェクト（画面中央にフワッと浮き出る） */
         #effect-container {
             position: absolute;
             top: 40%;
@@ -120,42 +142,37 @@
             color: #ffd700;
             text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 20px #ff2a5f;
             animation: popUp 1.5s ease-out forwards;
+            max-width: 90%;
+            word-wrap: break-word;
+            margin: 0 auto;
+            line-height: 1.2;
         }
 
         @keyframes popUp {
-            0% {
-                opacity: 0;
-                transform: scale(0.5) translateY(20px);
-            }
-            30% {
-                opacity: 1;
-                transform: scale(1.2) translateY(0);
-            }
-            70% {
-                opacity: 1;
-                transform: scale(1) translateY(0);
-            }
-            100% {
-                opacity: 0;
-                transform: scale(1) translateY(-50px);
-            }
+            0% { opacity: 0; transform: scale(0.5) translateY(20px); }
+            30% { opacity: 1; transform: scale(1.2) translateY(0); }
+            70% { opacity: 1; transform: scale(1) translateY(0); }
+            100% { opacity: 0; transform: scale(1) translateY(-50px); }
         }
     </style>
 </head>
 <body>
 
     <div id="app-container">
-        <!-- スマホのカメラ映像を表示するタグ -->
+        <div id="role-select-screen">
+            <h2>配信モードを選んでください</h2>
+            <button class="role-btn" id="btn-liver">🔴 配信者 (Liver) として始める</button>
+            <button class="role-btn viewer" id="btn-viewer">👀 視聴者 (Viewer) として見る</button>
+        </div>
+
         <video id="camera-video" autoplay playsinline muted></video>
 
-        <!-- 配信画面のUI -->
         <div class="overlay-layer">
             <div class="header">
-                <span class="live-badge">LIVE</span>
-                <span>👤 3</span>
+                <span class="live-badge" id="status-badge">LIVE</span>
+                <span id="role-display">モード未選択</span>
             </div>
 
-            <!-- エフェクトが出る場所 -->
             <div id="effect-container"></div>
 
             <div class="footer">
@@ -166,47 +183,115 @@
 
     <script>
         const socket = io();
+        let localStream;
+        let peerConnection;
 
-        // 1. スマホやPCのカメラ映像を起動して背景に映す処理
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'user' }, // インカメラを優先
-                    audio: false 
-                });
-                const videoElement = document.getElementById('camera-video');
-                videoElement.srcObject = stream;
-            } catch (err) {
-                console.log("カメラの起動に失敗しました（PCの場合カメラがない等の理由）: ", err);
-            }
+        const rtcConfig = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        };
+
+        const videoElement = document.getElementById('camera-video');
+        const roleScreen = document.getElementById('role-select-screen');
+        const roleDisplay = document.getElementById('role-display');
+
+        // WebRTCの接続管理を作る関数
+        function createPeerConnection() {
+            if (peerConnection) return;
+            peerConnection = new RTCPeerConnection(rtcConfig);
+
+            // 映像を受け取ったときの処理
+            peerConnection.ontrack = (event) => {
+                console.log('映像を受信しました！');
+                videoElement.srcObject = event.streams[0];
+            };
+
+            // ネットワーク候補が見つかったら相手に送る
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('candidate', event.candidate);
+                }
+            };
         }
-        startCamera();
 
-        // 2. ギフトボタンを押したときの処理
-        document.getElementById('gift-trigger').addEventListener('click', () => {
-            // サーバーへ「ギフトが送られたよ」という合図を送る
-            socket.emit('send-gift', { userName: 'テストユーザー' });
+        // 1. 【配信者として開始】
+        document.getElementById('btn-liver').addEventListener('click', async () => {
+            roleScreen.style.display = 'none';
+            roleDisplay.innerText = '配信者 (Liver)';
+            
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                videoElement.srcObject = localStream;
+
+                // 視聴者から「映像をください」という合図が来たら準備する
+                socket.on('request-offer', async () => {
+                    console.log('視聴者からのリクエストを受信。オファーを作成します');
+                    createPeerConnection();
+                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                    
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    socket.emit('offer', offer);
+                });
+
+            } catch (err) {
+                alert("カメラの起動に失敗しました: " + err);
+            }
         });
 
-        // 3. サーバーから「ギフトが届いたよ」と教えられたときの処理
+        // 2. 【視聴者として見る】
+        document.getElementById('btn-viewer').addEventListener('click', () => {
+            roleScreen.style.display = 'none';
+            roleDisplay.innerText = '視聴者 (Viewer)';
+            videoElement.muted = false;
+
+            createPeerConnection();
+            console.log('配信者へ映像のリクエストを送ります');
+            socket.emit('request-offer');
+        });
+
+        // シグナリング受信
+        socket.on('offer', async (offer) => {
+            console.log('オファーを受信しました');
+            createPeerConnection();
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit('answer', answer);
+        });
+
+        socket.on('answer', async (answer) => {
+            console.log('アンサーを受信しました');
+            if (peerConnection) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            }
+        });
+
+        socket.on('candidate', async (candidate) => {
+            if (peerConnection) {
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (e) {
+                    console.error('ICE候補の追加に失敗しました', e);
+                }
+            }
+        });
+
+        // ギフト機能
+        document.getElementById('gift-trigger').addEventListener('click', () => {
+            socket.emit('send-gift', { userName: '視聴者さん' });
+        });
+
         socket.on('receive-gift', (data) => {
             showGiftEffect(data.userName);
         });
 
-        // 画面にエフェクト文字を表示する関数
         function showGiftEffect(userName) {
             const container = document.getElementById('effect-container');
-            
             const div = document.createElement('div');
             div.className = 'gift-effect-text';
             div.innerText = `🎉 ${userName}さんがギフトを贈りました！`;
-            
             container.appendChild(div);
-
-            // アニメーションが終わったらHTML要素を削除する
-            setTimeout(() => {
-                div.remove();
-            }, 1500);
+            setTimeout(() => { div.remove(); }, 1500);
         }
     </script>
 </body>

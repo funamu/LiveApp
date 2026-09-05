@@ -6,19 +6,37 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// 静ファイル（HTMLなど）を公開する設定
 app.use(express.static(__dirname));
 
 io.on('connection', (socket) => {
-    console.log('ユーザーが接続しました');
+    console.log('ユーザーが接続しました:', socket.id);
 
-    // クライアントからギフト通知を受け取ったら、全員に共有する
+    // 視聴者から「配信者の映像がほしい」という合図を受け取ったら、全員（配信者）に伝える
+    socket.on('request-offer', () => {
+        console.log('視聴者からのリクエストを中継します');
+        socket.broadcast.emit('request-offer');
+    });
+
+    // WebRTCのシグナリング中継
+    socket.on('offer', (data) => {
+        socket.broadcast.emit('offer', data);
+    });
+
+    socket.on('answer', (data) => {
+        socket.broadcast.emit('answer', data);
+    });
+
+    socket.on('candidate', (data) => {
+        socket.broadcast.emit('candidate', data);
+    });
+
+    // ギフト機能の共有
     socket.on('send-gift', (data) => {
         io.emit('receive-gift', data);
     });
 
     socket.on('disconnect', () => {
-        console.log('ユーザーが切断しました');
+        console.log('ユーザーが切断しました:', socket.id);
     });
 });
 
