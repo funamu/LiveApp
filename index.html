@@ -21,7 +21,7 @@
             width: 100vw; height: 100vh; height: 100dvh;
             background: #000;
             display: flex;
-            flex-direction: row; /* 横画面デフォルト：2カラム */
+            flex-direction: row;
             overflow: hidden;
         }
 
@@ -40,14 +40,14 @@
         #camera-video {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* バンド演奏全体を収めるため16:9のアスペクト比を保持 */
+            object-fit: contain;
             background: #000;
         }
 
-        /* 配信準備中・待機用オーバーレイ */
+        /* 配信準備中・待機用オーバーレイ（視聴者のみ表示） */
         #standby-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000000;
+            background: rgba(0, 0, 0, 0.9);
             z-index: 5; display: flex; flex-direction: column;
             justify-content: center; align-items: center;
             gap: 12px; transition: opacity 0.3s ease;
@@ -69,9 +69,12 @@
             backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
         }
         .live-badge {
-            background: linear-gradient(135deg, #FF2A54, #FF0040);
+            background: #8e8e93;
             padding: 3px 8px; border-radius: 6px;
             font-size: 11px; font-weight: 800; letter-spacing: 0.5px;
+        }
+        .live-badge.is-live {
+            background: linear-gradient(135deg, #FF2A54, #FF0040);
         }
         .user-name-btn {
             font-size: 12px; font-weight: 600; color: #fff;
@@ -92,11 +95,24 @@
         .btn-host-control.is-live { background: #FF3B30; }
 
         .btn-toggle-chat {
-            background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15);
-            color: #fff; width: 34px; height: 34px; border-radius: 50%;
+            background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; width: 36px; height: 36px; border-radius: 50%;
             display: flex; justify-content: center; align-items: center;
-            cursor: pointer; backdrop-filter: blur(10px);
+            cursor: pointer; backdrop-filter: blur(10px); font-size: 16px;
         }
+
+        /* 映像右下の「クイックギフトボタン」（シアターモード時も常時表示） */
+        .btn-floating-gift {
+            position: absolute; bottom: 16px; right: 16px;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: linear-gradient(135deg, #FF2A54, #FF7B00);
+            border: none; color: white; display: flex;
+            justify-content: center; align-items: center;
+            cursor: pointer; z-index: 12;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transition: transform 0.2s;
+        }
+        .btn-floating-gift:active { transform: scale(0.92); }
 
         /* --- サイドパネル（右側：チャット＆ギフト） --- */
         .side-panel {
@@ -108,11 +124,12 @@
             display: flex;
             flex-direction: column;
             z-index: 10;
-            transition: margin-right 0.3s ease;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
         }
 
         .side-panel.collapsed {
-            margin-right: -320px;
+            width: 0;
             max-width: 0;
             overflow: hidden;
             border-left: none;
@@ -120,6 +137,7 @@
 
         #chat-logs {
             flex: 1;
+            min-height: 0; /* フレックス要素内でのスクロールを正常化 */
             overflow-y: auto;
             display: flex;
             flex-direction: column;
@@ -127,7 +145,7 @@
             padding: 16px;
         }
 
-        /* チャットアイテム（背景なし・2行構成） */
+        /* チャットアイテム */
         .chat-item {
             display: flex; flex-direction: column; gap: 2px; width: 100%;
         }
@@ -156,17 +174,18 @@
             font-size: 13px; font-weight: 700; color: #FFF;
         }
 
-        /* チャット・ギフト操作バー */
+        /* チャット・ギフト操作バー（最下部固定） */
         .action-bar {
-            padding: 12px;
+            padding: 10px 12px;
             background: #1a1a1e;
             border-top: 1px solid rgba(255, 255, 255, 0.08);
             display: flex; gap: 8px; align-items: center;
+            flex-shrink: 0;
         }
         #chat-input {
             flex: 1; background: rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(255, 255, 255, 0.15);
-            padding: 10px 14px; border-radius: 20px;
+            padding: 8px 12px; border-radius: 20px;
             color: #fff; font-size: 13px; outline: none;
         }
         #chat-input::placeholder { color: rgba(255,255,255,0.35); }
@@ -182,13 +201,13 @@
             background: linear-gradient(135deg, #FF2A54, #FF7B00);
         }
 
-        /* ギフト選択ドロワー（右下にポップアップ） */
+        /* ギフトドロワー */
         #gift-drawer {
-            display: none; position: absolute; bottom: 65px; right: 12px; left: 12px;
+            display: none; position: fixed; bottom: 65px; right: 12px; width: 300px;
             background: rgba(25, 25, 30, 0.95); border-radius: 20px; padding: 12px;
             border: 1px solid rgba(255, 255, 255, 0.15);
             grid-template-columns: repeat(2, 1fr); gap: 8px;
-            z-index: 20; backdrop-filter: blur(20px);
+            z-index: 50; backdrop-filter: blur(20px);
             box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
         .gift-card {
@@ -200,14 +219,14 @@
         .gift-name { font-size: 11px; font-weight: 700; color: #eee; }
         .gift-price { font-size: 10px; color: #FFB340; font-weight: 700; }
 
-        /* ギフト中央エフェクト（演奏を邪魔しない下寄り配置） */
+        /* ギフト演出 */
         #effect-container {
-            position: absolute; bottom: 15%; left: 50%;
+            position: absolute; bottom: 18%; left: 50%;
             transform: translateX(-50%);
             z-index: 30; pointer-events: none; text-align: center; width: 100%;
         }
         .gift-effect-text {
-            font-size: 22px; font-weight: 900; color: #FFF;
+            font-size: 20px; font-weight: 900; color: #FFF;
             text-shadow: 0 4px 16px rgba(255, 42, 84, 0.9), 0 0 10px #000;
             animation: popUp 2.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
@@ -218,7 +237,7 @@
             100% { opacity: 0; transform: scale(0.9) translateY(-20px); }
         }
 
-        /* ニックネーム変更モーダル */
+        /* ニックネーム設定モーダル */
         #name-input-modal {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
@@ -239,15 +258,15 @@
             border-radius: 24px; cursor: pointer; width: 100%;
         }
 
-        /* --- スマホ縦画面用レスポンシブ（上下2段構成） --- */
+        /* --- スマホ縦画面用レスポンシブ --- */
         @media (max-aspect-ratio: 1/1) {
             #app-container { flex-direction: column; }
-            .video-section { height: 40vh; flex: none; }
+            .video-section { height: 38vh; flex: none; }
             .side-panel {
                 width: 100%; max-width: 100%; flex: 1;
                 border-left: none; border-top: 1px solid rgba(255,255,255,0.08);
             }
-            .side-panel.collapsed { margin-right: 0; margin-bottom: -100%; height: 0; }
+            .side-panel.collapsed { height: 0; margin-bottom: 0; }
         }
     </style>
 </head>
@@ -272,9 +291,15 @@
 
                 <div class="header-actions">
                     <button id="btn-host-toggle" class="btn-host-control" style="display: none;">配信開始</button>
+                    <!-- チャット非表示・表示切替ボタン（常時表示） -->
                     <button id="btn-toggle-chat" class="btn-toggle-chat" title="チャットの表示切替">💬</button>
                 </div>
             </div>
+
+            <!-- クイックギフトボタン（シアターモード時・非表示時でもすぐに投げ銭可能） -->
+            <button id="btn-quick-gift" class="btn-floating-gift" style="display: none;" title="ギフトを贈る">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+            </button>
 
             <video id="camera-video" autoplay playsinline muted></video>
             <div id="effect-container"></div>
@@ -284,40 +309,39 @@
         <div class="side-panel" id="side-panel">
             <div id="chat-logs"></div>
 
-            <div style="position: relative;">
-                <div id="gift-drawer">
-                    <div class="gift-card" onclick="sendGift('応援', '📣', '￥500')">
-                        <div class="gift-icon">📣</div>
-                        <div class="gift-name">応援</div>
-                        <div class="gift-price">￥500</div>
-                    </div>
-                    <div class="gift-card" onclick="sendGift('アルコール', '🍺', '￥1,000')">
-                        <div class="gift-icon">🍺</div>
-                        <div class="gift-name">アルコール</div>
-                        <div class="gift-price">￥1,000</div>
-                    </div>
-                    <div class="gift-card" onclick="sendGift('ウイスキー', '🥃', '￥3,000')">
-                        <div class="gift-icon">🥃</div>
-                        <div class="gift-name">ウイスキー</div>
-                        <div class="gift-price">￥3,000</div>
-                    </div>
-                    <div class="gift-card" onclick="sendGift('シャンパン', '🍾', '￥10,000')">
-                        <div class="gift-icon">🍾</div>
-                        <div class="gift-name">シャンパン</div>
-                        <div class="gift-price">￥10,000</div>
-                    </div>
-                </div>
-
-                <div class="action-bar">
-                    <input type="text" id="chat-input" placeholder="コメントを入力..." maxlength="50">
-                    <button class="icon-btn icon-btn-send" id="btn-send-chat">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                    </button>
-                    <button class="icon-btn icon-btn-gift" id="btn-toggle-gift">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
-                    </button>
-                </div>
+            <div class="action-bar">
+                <input type="text" id="chat-input" placeholder="コメントを入力..." maxlength="50">
+                <button class="icon-btn icon-btn-send" id="btn-send-chat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+                <button class="icon-btn icon-btn-gift" id="btn-panel-gift">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+                </button>
             </div>
+        </div>
+    </div>
+
+    <!-- 共通ギフト選択ドロワー -->
+    <div id="gift-drawer">
+        <div class="gift-card" onclick="sendGift('応援', '📣', '￥500')">
+            <div class="gift-icon">📣</div>
+            <div class="gift-name">応援</div>
+            <div class="gift-price">￥500</div>
+        </div>
+        <div class="gift-card" onclick="sendGift('アルコール', '🍺', '￥1,000')">
+            <div class="gift-icon">🍺</div>
+            <div class="gift-name">アルコール</div>
+            <div class="gift-price">￥1,000</div>
+        </div>
+        <div class="gift-card" onclick="sendGift('ウイスキー', '🥃', '￥3,000')">
+            <div class="gift-icon">🥃</div>
+            <div class="gift-name">ウイスキー</div>
+            <div class="gift-price">￥3,000</div>
+        </div>
+        <div class="gift-card" onclick="sendGift('シャンパン', '🍾', '￥10,000')">
+            <div class="gift-icon">🍾</div>
+            <div class="gift-name">シャンパン</div>
+            <div class="gift-price">￥10,000</div>
         </div>
     </div>
 
@@ -351,6 +375,8 @@
         const standbyOverlay = document.getElementById('standby-overlay');
         const liveBadge = document.getElementById('live-badge');
         const hostBtn = document.getElementById('btn-host-toggle');
+        const sidePanel = document.getElementById('side-panel');
+        const quickGiftBtn = document.getElementById('btn-quick-gift');
 
         const urlParams = new URLSearchParams(window.location.search);
         const hostKey = urlParams.get('host');
@@ -364,9 +390,11 @@
             }
         });
 
-        // チャットパネルの開閉（シアターモード）
+        // チャットパネル開閉（非表示時はクイックギフトボタンを表示）
         document.getElementById('btn-toggle-chat').addEventListener('click', () => {
-            document.getElementById('side-panel').classList.toggle('collapsed');
+            sidePanel.classList.toggle('collapsed');
+            const isCollapsed = sidePanel.classList.contains('collapsed');
+            quickGiftBtn.style.display = isCollapsed ? 'flex' : 'none';
         });
 
         document.getElementById('btn-edit-name').addEventListener('click', () => {
@@ -382,11 +410,13 @@
                 standbyOverlay.style.opacity = '0';
                 setTimeout(() => standbyOverlay.style.display = 'none', 300);
                 liveBadge.innerText = 'LIVE';
+                liveBadge.classList.add('is-live');
                 socket.emit('request-offer');
             } else {
                 standbyOverlay.style.display = 'flex';
                 standbyOverlay.style.opacity = '1';
                 liveBadge.innerText = 'OFFLINE';
+                liveBadge.classList.remove('is-live');
                 document.getElementById('standby-title').innerText = status.hasBroadcaster ? "配信準備中" : "配信オフライン";
                 document.getElementById('standby-desc').innerText = status.hasBroadcaster ? "まもなく配信が始まります..." : "配信者が参加するまでお待ちください";
             }
@@ -397,34 +427,35 @@
                 document.getElementById('role-display').innerText = '配信者';
                 document.getElementById('user-id-display').innerText = '';
                 hostBtn.style.display = 'block';
-                standbyOverlay.style.display = 'none';
+                standbyOverlay.style.display = 'none'; // 配信者の画面からは準備中オーバーレイを消す
 
                 try {
-                    // カメラ・マイクの初期化
+                    // 配信者ローカル映像は常に表示
                     localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
                     videoElement.srcObject = localStream;
                     
-                    // 初期状態（準備中）はマイク・映像のトラックを完全にOFF（消音・ブラックアウト）
-                    setTracksEnabled(false);
+                    // 初期状態（準備中）はWebRTC用トラック送信のみ無効化
+                    setMediaTracksEnabled(false);
 
                 } catch (err) { alert("カメラ起動エラー: " + err); }
 
                 hostBtn.addEventListener('click', () => {
                     isBroadcasting = !isBroadcasting;
                     
-                    // 配信状態に応じてトラック（音声・映像）の有効化/無効化を即座に切り替え
-                    setTracksEnabled(isBroadcasting);
-                    
+                    // 配信ON/OFFに連動してトラック送信を切り替え
+                    setMediaTracksEnabled(isBroadcasting);
                     socket.emit('toggle-stream', isBroadcasting);
 
                     if (isBroadcasting) {
                         hostBtn.innerText = '配信停止';
                         hostBtn.classList.add('is-live');
                         liveBadge.innerText = 'LIVE';
+                        liveBadge.classList.add('is-live');
                     } else {
                         hostBtn.innerText = '配信開始';
                         hostBtn.classList.remove('is-live');
                         liveBadge.innerText = 'PREPARE';
+                        liveBadge.classList.remove('is-live');
                     }
                 });
 
@@ -443,8 +474,7 @@
             }
         });
 
-        // 音声・映像トラックの完全有効/無効化ロジック
-        function setTracksEnabled(enabled) {
+        function setMediaTracksEnabled(enabled) {
             if (localStream) {
                 localStream.getTracks().forEach(track => {
                     track.enabled = enabled;
@@ -512,9 +542,7 @@
                     text: chatInput.value.trim()
                 });
                 chatInput.value = '';
-                
-                // 横向きスマホキーボード対策：送信後に自動でフォーカスを外してキーボードを閉じる
-                chatInput.blur();
+                chatInput.blur(); // 送信後にキーボードを自動閉じる
             }
         }
 
@@ -541,11 +569,14 @@
             logs.scrollTop = logs.scrollHeight;
         });
 
-        // ギフト処理
+        // ギフト処理（パネル内ボタン・クイックボタン共通）
         const giftDrawer = document.getElementById('gift-drawer');
-        document.getElementById('btn-toggle-gift').addEventListener('click', () => {
+        const toggleGiftDrawer = () => {
             giftDrawer.style.display = (giftDrawer.style.display === 'grid') ? 'none' : 'grid';
-        });
+        };
+
+        document.getElementById('btn-panel-gift').addEventListener('click', toggleGiftDrawer);
+        quickGiftBtn.addEventListener('click', toggleGiftDrawer);
 
         function sendGift(giftName, icon, price) {
             giftDrawer.style.display = 'none';
