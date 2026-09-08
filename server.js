@@ -4,21 +4,23 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+    cors: { origin: "*" }
+});
 
 app.use(express.static(__dirname));
 
 let currentBroadcaster = null;
-let isBroadcasting = false; // 配信開始フラグ
+let isBroadcasting = false;
 const SECRET_HOST_KEY = 'secret123';
 
 io.on('connection', (socket) => {
     console.log('ユーザー接続:', socket.id);
 
-    // 視聴者接続時に現在の配信状態を伝える
+    // 接続時に現在の配信状態を通知
     socket.emit('broadcaster-status', { hasBroadcaster: !!currentBroadcaster, isBroadcasting });
 
-    // 配信者リクエスト
+    // 配信者認証
     socket.on('register-broadcaster', (key) => {
         if (key === SECRET_HOST_KEY) {
             if (!currentBroadcaster || currentBroadcaster === socket.id) {
@@ -35,7 +37,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 配信開始・停止のトグル切替
+    // 配信ON/OFFの切替
     socket.on('toggle-stream', (status) => {
         if (socket.id === currentBroadcaster) {
             isBroadcasting = status;
@@ -44,26 +46,44 @@ io.on('connection', (socket) => {
         }
     });
 
-    // WebRTCシグナリング
+    // WebRTC 1:N シグナリングルーティング
     socket.on('request-offer', () => {
-        if (currentBroadcaster) {
+        if (currentBroadcaster && isBroadcasting) {
             io.to(currentBroadcaster).emit('request-offer-from', socket.id);
         }
     });
 
     socket.on('offer', (data) => {
-        socket.broadcast.emit('offer', data);
+        // data: { target, offer }
+        if (data.target) {
+            io.to(data.target).emit('offer', {
+                broadcasterId: socket.id,
+                offer: data.offer
+            });
+        }
     });
 
     socket.on('answer', (data) => {
-        socket.broadcast.emit('answer', data);
+        // data: { target, answer }
+        if (data.target) {
+            io.to(data.target).emit('answer', {
+                viewerId: socket.id,
+                answer: data.answer
+            });
+        }
     });
 
     socket.on('candidate', (data) => {
-        socket.broadcast.emit('candidate', data);
+        // data: { target, candidate }
+        if (data.target) {
+            io.to(data.target).emit('candidate', {
+                senderId: socket.id,
+                candidate: data.candidate
+            });
+        }
     });
 
-    // チャット＆ギフト
+    // チャット・ギフト
     socket.on('send-chat', (data) => io.emit('receive-chat', data));
     socket.on('send-gift', (data) => io.emit('receive-gift', data));
 
