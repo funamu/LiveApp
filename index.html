@@ -1,379 +1,626 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ライブ配信アプリ</title>
-  <style>
-    /* ========== ベース設定 ========== */
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ライブ配信プロトタイプ</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0;
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh; height: 100dvh;
+            color: #fff;
+        }
 
-    body {
-      background-color: #121212;
-      color: #ffffff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      overflow-x: hidden;
-    }
+        #app-container {
+            position: relative;
+            width: 100vw; height: 100vh; height: 100dvh;
+            background: #000;
+            display: flex;
+            flex-direction: row;
+            overflow: hidden;
+        }
 
-    /* メインコンテナ */
-    .app-container {
-      width: 100%;
-      max-width: 500px; /* スマホ表示用枠 */
-      min-height: 100dvh;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      background-color: #000000;
-      position: relative;
-    }
+        /* --- 映像エリア（左側：16:9維持） --- */
+        .video-section {
+            position: relative;
+            flex: 1;
+            height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
 
-    /* ========== 画面切り替えタブ（確認用） ========== */
-    .view-switch {
-      display: flex;
-      background: #1e1e1e;
-      border-bottom: 1px solid #333;
-      z-index: 100;
-    }
+        #camera-video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
 
-    .view-switch button {
-      flex: 1;
-      padding: 10px;
-      background: none;
-      border: none;
-      color: #888;
-      font-weight: bold;
-      font-size: 14px;
-      cursor: pointer;
-    }
+        /* 配信準備中・待機用オーバーレイ（視聴者のみ表示） */
+        #standby-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 5; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            gap: 12px; transition: opacity 0.3s ease;
+        }
+        #standby-overlay h3 { margin: 0; font-size: 20px; font-weight: 600; }
+        #standby-overlay p { margin: 0; font-size: 13px; color: #8e8e93; }
 
-    .view-switch button.active {
-      color: #fff;
-      border-bottom: 2px solid #ff4081;
-      background: #252525;
-    }
+        /* 映像上のヘッダーコントロール */
+        .video-header-overlay {
+            position: absolute; top: 12px; left: 12px; right: 12px;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 10; pointer-events: none;
+        }
+        .video-header-overlay > * { pointer-events: auto; }
 
-    /* 各画面の表示制御 */
-    .screen {
-      display: none;
-      flex: 1;
-      flex-direction: column;
-      height: calc(100dvh - 41px); /* タブの高さを差し引く */
-      position: relative;
-      overflow: hidden;
-    }
+        .header-info {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(0, 0, 0, 0.6); padding: 6px 12px; border-radius: 20px;
+            backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
+        }
+        .live-badge {
+            background: #8e8e93;
+            padding: 3px 8px; border-radius: 6px;
+            font-size: 11px; font-weight: 800; letter-spacing: 0.5px;
+        }
+        .live-badge.is-live {
+            background: linear-gradient(135deg, #FF2A54, #FF0040);
+        }
+        .user-name-btn {
+            font-size: 12px; font-weight: 600; color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 4px 10px; border-radius: 12px; cursor: pointer;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .user-id-tag { font-size: 10px; color: rgba(255, 255, 255, 0.5); }
 
-    .screen.active {
-      display: flex;
-    }
+        .header-actions {
+            display: flex; gap: 8px; align-items: center;
+        }
+        .btn-host-control {
+            background: #34C759; border: none; color: white;
+            padding: 6px 14px; border-radius: 16px; font-weight: 700;
+            font-size: 12px; cursor: pointer; transition: background 0.2s;
+        }
+        .btn-host-control.is-live { background: #FF3B30; }
 
-    /* ========== 映像表示エリア (共通) ========== */
-    .video-container {
-      position: relative;
-      flex: 1;
-      width: 100%;
-      background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
+        .btn-toggle-chat {
+            background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; width: 36px; height: 36px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; backdrop-filter: blur(10px); font-size: 16px;
+        }
 
-    video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
+        /* 映像右下の「クイックギフトボタン」（シアターモード時も常時表示） */
+        .btn-floating-gift {
+            position: absolute; bottom: 16px; right: 16px;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: linear-gradient(135deg, #FF2A54, #FF7B00);
+            border: none; color: white; display: flex;
+            justify-content: center; align-items: center;
+            cursor: pointer; z-index: 12;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transition: transform 0.2s;
+        }
+        .btn-floating-gift:active { transform: scale(0.92); }
 
-    /* ========== 配信者画面レイアウト ========== */
-    .broadcaster-controls {
-      position: absolute;
-      bottom: 20px;
-      left: 0;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      padding: 0 16px;
-      z-index: 20;
-    }
+        /* --- サイドパネル（右側：チャット＆ギフト） --- */
+        .side-panel {
+            width: 320px;
+            max-width: 32vw;
+            height: 100%;
+            background: #121215;
+            border-left: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
 
-    .btn-start-live {
-      width: 100%;
-      max-width: 300px;
-      height: 48px;
-      border-radius: 24px;
-      border: none;
-      background: linear-gradient(45deg, #ff4081, #ff80ab);
-      color: #fff;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(255, 64, 129, 0.4);
-    }
+        .side-panel.collapsed {
+            width: 0;
+            max-width: 0;
+            overflow: hidden;
+            border-left: none;
+        }
 
-    .btn-start-live:active {
-      transform: scale(0.98);
-    }
+        #chat-logs {
+            flex: 1;
+            min-height: 0; /* フレックス要素内でのスクロールを正常化 */
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+        }
 
-    /* ========== 視聴者画面レイアウト ========== */
-    /* コメントコンテナ (画面下部に配置) */
-    .comments-container {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      max-height: 45%; /* コメントエリアの高さを制限 */
-      display: flex;
-      flex-direction: column;
-      background: linear-gradient(to top, rgba(0,0,0,0.85) 70%, rgba(0,0,0,0));
-      z-index: 10;
-    }
+        /* チャットアイテム */
+        .chat-item {
+            display: flex; flex-direction: column; gap: 2px; width: 100%;
+        }
+        .chat-header {
+            display: flex; align-items: center; gap: 4px;
+            font-size: 11px; color: rgba(255, 255, 255, 0.6); font-weight: 600;
+        }
+        .chat-user { color: #FFD166; font-weight: 700; }
+        .chat-id { font-size: 10px; color: rgba(255, 255, 255, 0.4); }
+        .host-badge {
+            background: #FF2A54; color: #fff; font-size: 9px; font-weight: 800;
+            padding: 1px 5px; border-radius: 4px;
+        }
+        .chat-text {
+            font-size: 13.5px; font-weight: 500; color: #ffffff;
+            line-height: 1.35; word-break: break-all;
+        }
 
-    /* コメント一覧 (スクロール可能) */
-    .comments-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      -webkit-overflow-scrolling: touch;
-    }
+        /* ギフトメッセージ */
+        .chat-item.gift-notice {
+            background: linear-gradient(135deg, rgba(255, 42, 84, 0.25), rgba(255, 123, 0, 0.25));
+            border: 1px solid rgba(255, 42, 84, 0.4);
+            padding: 8px 12px; border-radius: 12px;
+        }
+        .gift-notice .chat-text {
+            font-size: 13px; font-weight: 700; color: #FFF;
+        }
 
-    .comment-bubble {
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(4px);
-      padding: 6px 12px;
-      border-radius: 14px;
-      font-size: 13px;
-      color: #fff;
-      align-self: flex-start;
-      max-width: 85%;
-      word-break: break-all;
-    }
+        /* チャット・ギフト操作バー（最下部固定） */
+        .action-bar {
+            padding: 10px 12px;
+            background: #1a1a1e;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex; gap: 8px; align-items: center;
+            flex-shrink: 0;
+        }
+        #chat-input {
+            flex: 1; background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 8px 12px; border-radius: 20px;
+            color: #fff; font-size: 13px; outline: none;
+        }
+        #chat-input::placeholder { color: rgba(255,255,255,0.35); }
 
-    /* ★画面外にはみ出さないように修正した入力バー ★ */
-    .comment-input-bar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 12px;
-      background: #000;
-      width: 100%;
-      box-sizing: border-box; /* 横幅固定の肝 */
-    }
+        .icon-btn {
+            background: transparent; border: none;
+            width: 36px; height: 36px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; flex-shrink: 0; color: #fff;
+        }
+        .icon-btn-send { background: #fff; color: #000; }
+        .icon-btn-gift {
+            background: linear-gradient(135deg, #FF2A54, #FF7B00);
+        }
 
-    /* 入力エリア：画面幅に合わせて可変縮小 */
-    .comment-input-bar input {
-      flex: 1;
-      min-width: 0; /* フレックスボックスでの文字あふれ防止 */
-      height: 38px;
-      border-radius: 19px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      padding: 0 14px;
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
-      font-size: 14px;
-      outline: none;
-    }
+        /* ギフトドロワー */
+        #gift-drawer {
+            display: none; position: fixed; bottom: 65px; right: 12px; width: 300px;
+            background: rgba(25, 25, 30, 0.95); border-radius: 20px; padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            grid-template-columns: repeat(2, 1fr); gap: 8px;
+            z-index: 50; backdrop-filter: blur(20px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        .gift-card {
+            background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 10px;
+            text-align: center; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .gift-card:active { background: rgba(255, 255, 255, 0.15); }
+        .gift-icon { font-size: 24px; margin-bottom: 2px; }
+        .gift-name { font-size: 11px; font-weight: 700; color: #eee; }
+        .gift-price { font-size: 10px; color: #FFB340; font-weight: 700; }
 
-    .comment-input-bar input::placeholder {
-      color: rgba(255, 255, 255, 0.5);
-    }
+        /* ギフト演出 */
+        #effect-container {
+            position: absolute; bottom: 18%; left: 50%;
+            transform: translateX(-50%);
+            z-index: 30; pointer-events: none; text-align: center; width: 100%;
+        }
+        .gift-effect-text {
+            font-size: 20px; font-weight: 900; color: #FFF;
+            text-shadow: 0 4px 16px rgba(255, 42, 84, 0.9), 0 0 10px #000;
+            animation: popUp 2.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes popUp {
+            0% { opacity: 0; transform: scale(0.5) translateY(20px); }
+            15% { opacity: 1; transform: scale(1) translateY(0); }
+            80% { opacity: 1; transform: scale(1) translateY(0); }
+            100% { opacity: 0; transform: scale(0.9) translateY(-20px); }
+        }
 
-    /* 各種ボタン：画面外に押し出されないようサイズ固定 */
-    .btn-send,
-    .btn-gift {
-      flex-shrink: 0; /* 縮小・はみ出しを防止 */
-      height: 38px;
-      border: none;
-      border-radius: 19px;
-      font-weight: bold;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+        /* ニックネーム設定モーダル */
+        #name-input-modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
+            z-index: 100; display: flex; justify-content: center; align-items: center;
+        }
+        .modal-card {
+            background: rgba(30, 30, 35, 0.95); border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 24px; border-radius: 20px; text-align: center; width: 88%; max-width: 320px;
+        }
+        .input-field {
+            width: 100%; padding: 12px; margin: 16px 0; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.15); background: rgba(0, 0, 0, 0.5);
+            color: #fff; font-size: 14px; text-align: center; outline: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #FF2A54, #FF6445);
+            color: white; border: none; padding: 12px 24px; font-size: 14px; font-weight: 700;
+            border-radius: 24px; cursor: pointer; width: 100%;
+        }
 
-    .btn-send {
-      padding: 0 14px;
-      background: #2196F3;
-      color: #fff;
-      font-size: 13px;
-    }
-
-    .btn-gift {
-      width: 38px;
-      background: #ff4081;
-      font-size: 18px;
-    }
-  </style>
+        /* --- スマホ縦画面用レスポンシブ --- */
+        @media (max-aspect-ratio: 1/1) {
+            #app-container { flex-direction: column; }
+            .video-section { height: 38vh; flex: none; }
+            .side-panel {
+                width: 100%; max-width: 100%; flex: 1;
+                border-left: none; border-top: 1px solid rgba(255,255,255,0.08);
+            }
+            .side-panel.collapsed { height: 0; margin-bottom: 0; }
+        }
+    </style>
 </head>
 <body>
 
-  <div class="app-container">
-    <!-- 画面切替用タブ -->
-    <div class="view-switch">
-      <button id="tabBroadcaster" class="active" onclick="switchTab('broadcaster')">配信者画面</button>
-      <button id="tabViewer" onclick="switchTab('viewer')">視聴者画面</button>
+    <div id="app-container">
+        <!-- 映像エリア（左） -->
+        <div class="video-section">
+            <div id="standby-overlay">
+                <h3 id="standby-title">配信準備中</h3>
+                <p id="standby-desc">配信者が準備を開くのをお待ちください...</p>
+            </div>
+
+            <div class="video-header-overlay">
+                <div class="header-info">
+                    <span class="live-badge" id="live-badge">OFFLINE</span>
+                    <div class="user-name-btn" id="btn-edit-name">
+                        <span id="role-display">接続中...</span>
+                        <span id="user-id-display" class="user-id-tag"></span>
+                    </div>
+                </div>
+
+                <div class="header-actions">
+                    <button id="btn-host-toggle" class="btn-host-control" style="display: none;">配信開始</button>
+                    <!-- チャット非表示・表示切替ボタン（常時表示） -->
+                    <button id="btn-toggle-chat" class="btn-toggle-chat" title="チャットの表示切替">💬</button>
+                </div>
+            </div>
+
+            <!-- クイックギフトボタン（シアターモード時・非表示時でもすぐに投げ銭可能） -->
+            <button id="btn-quick-gift" class="btn-floating-gift" style="display: none;" title="ギフトを贈る">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+            </button>
+
+            <video id="camera-video" autoplay playsinline muted></video>
+            <div id="effect-container"></div>
+        </div>
+
+        <!-- サイドパネル：チャット＆ギフト（右） -->
+        <div class="side-panel" id="side-panel">
+            <div id="chat-logs"></div>
+
+            <div class="action-bar">
+                <input type="text" id="chat-input" placeholder="コメントを入力..." maxlength="50">
+                <button class="icon-btn icon-btn-send" id="btn-send-chat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+                <button class="icon-btn icon-btn-gift" id="btn-panel-gift">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+                </button>
+            </div>
+        </div>
     </div>
 
-    <!-- ================= 1. 配信者画面 ================= -->
-    <div id="broadcasterScreen" class="screen active">
-      <div class="video-container">
-        <!-- ページ起動時からカメラ映像が常時表示されます（画角調整用） -->
-        <video id="localVideo" autoplay playsinline muted></video>
+    <!-- 共通ギフト選択ドロワー -->
+    <div id="gift-drawer">
+        <div class="gift-card" onclick="sendGift('応援', '📣', '￥500')">
+            <div class="gift-icon">📣</div>
+            <div class="gift-name">応援</div>
+            <div class="gift-price">￥500</div>
+        </div>
+        <div class="gift-card" onclick="sendGift('アルコール', '🍺', '￥1,000')">
+            <div class="gift-icon">🍺</div>
+            <div class="gift-name">アルコール</div>
+            <div class="gift-price">￥1,000</div>
+        </div>
+        <div class="gift-card" onclick="sendGift('ウイスキー', '🥃', '￥3,000')">
+            <div class="gift-icon">🥃</div>
+            <div class="gift-name">ウイスキー</div>
+            <div class="gift-price">￥3,000</div>
+        </div>
+        <div class="gift-card" onclick="sendGift('シャンパン', '🍾', '￥10,000')">
+            <div class="gift-icon">🍾</div>
+            <div class="gift-name">シャンパン</div>
+            <div class="gift-price">￥10,000</div>
+        </div>
+    </div>
+
+    <!-- ニックネーム設定モーダル -->
+    <div id="name-input-modal" style="display: none;">
+        <div class="modal-card">
+            <h3 style="margin:0 0 6px 0; font-size:16px;">ニックネームの設定</h3>
+            <p style="font-size: 11px; color: #8e8e93; margin:0;">表示されるお名前です</p>
+            <input type="text" id="username-input" class="input-field" placeholder="例: ゲスト" maxlength="12">
+            <button class="btn-primary" id="btn-save-name">保存して参加</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let localStream;
+        let peerConnection;
+        let userName = localStorage.getItem('live_user_name') || '';
         
-        <div class="broadcaster-controls">
-          <button id="startLiveBtn" class="btn-start-live" onclick="startBroadcasting()">配信を開始する</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ================= 2. 視聴者画面 ================= -->
-    <div id="viewerScreen" class="screen">
-      <div class="video-container">
-        <!-- 配信者からの映像が受信されて表示される部分 -->
-        <video id="remoteVideo" autoplay playsinline></video>
-
-        <!-- コメント＆操作エリア -->
-        <div class="comments-container">
-          <div class="comments-list" id="commentsList">
-            <div class="comment-bubble">運営: ライブ配信へようこそ！</div>
-            <div class="comment-bubble">視聴者A: こんにちは！</div>
-          </div>
-
-          <!-- 右端にはみ出さないよう調整した下部バー -->
-          <div class="comment-input-bar">
-            <input type="text" id="commentInput" placeholder="コメントを入力..." />
-            <button class="btn-send" onclick="sendComment()">送信</button>
-            <button class="btn-gift" aria-label="ギフト">🎁</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= スクリプト処理 ================= -->
-  <script>
-    // 要素の取得
-    const localVideo = document.getElementById('localVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
-    const startLiveBtn = document.getElementById('startLiveBtn');
-
-    let localStream = null;
-    let peerConnection = null;
-
-    const rtcConfiguration = {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    };
-
-    // --- 1. タブ切り替え（確認用） ---
-    function switchTab(type) {
-      document.getElementById('broadcasterScreen').classList.remove('active');
-      document.getElementById('viewerScreen').classList.remove('active');
-      document.getElementById('tabBroadcaster').classList.remove('active');
-      document.getElementById('tabViewer').classList.remove('active');
-
-      if (type === 'broadcaster') {
-        document.getElementById('broadcasterScreen').classList.add('active');
-        document.getElementById('tabBroadcaster').classList.add('active');
-      } else {
-        document.getElementById('viewerScreen').classList.add('active');
-        document.getElementById('tabViewer').classList.add('active');
-      }
-    }
-
-    // --- 2. 配信者側：カメラ起動（常時表示用） ---
-    async function initCamera() {
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        if (localVideo) {
-          localVideo.srcObject = localStream; // 配信開始前でもカメラを表示
+        let userId = localStorage.getItem('live_user_id');
+        if (!userId) {
+            userId = '#' + Math.floor(1000 + Math.random() * 9000).toString(16).toUpperCase();
+            localStorage.setItem('live_user_id', userId);
         }
-      } catch (error) {
-        console.error('カメラ・マイクの起動に失敗しました:', error);
-      }
-    }
 
-    // --- 3. 配信開始処理（視聴者へトラックを送信） ---
-    async function startBroadcasting() {
-      if (!localStream) await initCamera();
+        let isHost = false;
+        let isBroadcasting = false;
 
-      peerConnection = new RTCPeerConnection(rtcConfiguration);
+        const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        const videoElement = document.getElementById('camera-video');
+        const standbyOverlay = document.getElementById('standby-overlay');
+        const liveBadge = document.getElementById('live-badge');
+        const hostBtn = document.getElementById('btn-host-toggle');
+        const sidePanel = document.getElementById('side-panel');
+        const quickGiftBtn = document.getElementById('btn-quick-gift');
 
-      // ローカルの映像・音声トラックを確実に追加
-      localStream.getTracks().forEach((track) => {
-        peerConnection.addTrack(track, localStream);
-      });
+        const urlParams = new URLSearchParams(window.location.search);
+        const hostKey = urlParams.get('host');
 
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendSignalingMessage({ type: 'candidate', candidate: event.candidate });
+        window.addEventListener('DOMContentLoaded', () => {
+            if (hostKey) {
+                isHost = true;
+                socket.emit('register-broadcaster', hostKey);
+            } else {
+                initViewerMode();
+            }
+        });
+
+        // チャットパネル開閉（非表示時はクイックギフトボタンを表示）
+        document.getElementById('btn-toggle-chat').addEventListener('click', () => {
+            sidePanel.classList.toggle('collapsed');
+            const isCollapsed = sidePanel.classList.contains('collapsed');
+            quickGiftBtn.style.display = isCollapsed ? 'flex' : 'none';
+        });
+
+        document.getElementById('btn-edit-name').addEventListener('click', () => {
+            if (isHost) return;
+            document.getElementById('username-input').value = userName;
+            document.getElementById('name-input-modal').style.display = 'flex';
+        });
+
+        socket.on('broadcaster-status', (status) => {
+            if (isHost) return;
+
+            if (status.hasBroadcaster && status.isBroadcasting) {
+                standbyOverlay.style.opacity = '0';
+                setTimeout(() => standbyOverlay.style.display = 'none', 300);
+                liveBadge.innerText = 'LIVE';
+                liveBadge.classList.add('is-live');
+                socket.emit('request-offer');
+            } else {
+                standbyOverlay.style.display = 'flex';
+                standbyOverlay.style.opacity = '1';
+                liveBadge.innerText = 'OFFLINE';
+                liveBadge.classList.remove('is-live');
+                document.getElementById('standby-title').innerText = status.hasBroadcaster ? "配信準備中" : "配信オフライン";
+                document.getElementById('standby-desc').innerText = status.hasBroadcaster ? "まもなく配信が始まります..." : "配信者が参加するまでお待ちください";
+            }
+        });
+
+        socket.on('broadcaster-approved', async (res) => {
+            if (res.success) {
+                document.getElementById('role-display').innerText = '配信者';
+                document.getElementById('user-id-display').innerText = '';
+                hostBtn.style.display = 'block';
+                standbyOverlay.style.display = 'none'; // 配信者の画面からは準備中オーバーレイを消す
+
+                try {
+                    // 配信者ローカル映像は常に表示
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+                    videoElement.srcObject = localStream;
+                    
+                    // 初期状態（準備中）はWebRTC用トラック送信のみ無効化
+                    setMediaTracksEnabled(false);
+
+                } catch (err) { alert("カメラ起動エラー: " + err); }
+
+                hostBtn.addEventListener('click', () => {
+                    isBroadcasting = !isBroadcasting;
+                    
+                    // 配信ON/OFFに連動してトラック送信を切り替え
+                    setMediaTracksEnabled(isBroadcasting);
+                    socket.emit('toggle-stream', isBroadcasting);
+
+                    if (isBroadcasting) {
+                        hostBtn.innerText = '配信停止';
+                        hostBtn.classList.add('is-live');
+                        liveBadge.innerText = 'LIVE';
+                        liveBadge.classList.add('is-live');
+                    } else {
+                        hostBtn.innerText = '配信開始';
+                        hostBtn.classList.remove('is-live');
+                        liveBadge.innerText = 'PREPARE';
+                        liveBadge.classList.remove('is-live');
+                    }
+                });
+
+                socket.on('request-offer-from', async (viewerId) => {
+                    if (!isBroadcasting) return;
+                    createPeerConnection();
+                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    socket.emit('offer', offer);
+                });
+
+            } else {
+                alert(res.reason);
+                initViewerMode();
+            }
+        });
+
+        function setMediaTracksEnabled(enabled) {
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    track.enabled = enabled;
+                });
+            }
         }
-      };
 
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      sendSignalingMessage({ type: 'offer', sdp: peerConnection.localDescription });
-
-      startLiveBtn.innerText = "配信中";
-      startLiveBtn.style.background = "#4CAF50";
-    }
-
-    // --- 4. 視聴者側：映像受信処理 ---
-    async function handleReceiveOffer(offerSdp) {
-      if (!peerConnection) {
-        peerConnection = new RTCPeerConnection(rtcConfiguration);
-      }
-
-      // トラックを受信したら視聴者のvideo要素にセット
-      peerConnection.ontrack = (event) => {
-        if (remoteVideo && !remoteVideo.srcObject) {
-          remoteVideo.srcObject = event.streams[0];
+        function initViewerMode() {
+            if (!userName) {
+                document.getElementById('name-input-modal').style.display = 'flex';
+            } else {
+                startViewer();
+            }
         }
-      };
 
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendSignalingMessage({ type: 'candidate', candidate: event.candidate });
+        document.getElementById('btn-save-name').addEventListener('click', () => {
+            const input = document.getElementById('username-input').value.trim();
+            userName = input || 'ゲスト' + Math.floor(Math.random() * 1000);
+            localStorage.setItem('live_user_name', userName);
+            document.getElementById('name-input-modal').style.display = 'none';
+            startViewer();
+        });
+
+        function startViewer() {
+            document.getElementById('role-display').innerText = userName;
+            document.getElementById('user-id-display').innerText = userId;
+            videoElement.muted = false;
+            createPeerConnection();
+            socket.emit('request-offer');
         }
-      };
 
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(offerSdp));
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-      sendSignalingMessage({ type: 'answer', sdp: peerConnection.localDescription });
-    }
+        function createPeerConnection() {
+            if (peerConnection) return;
+            peerConnection = new RTCPeerConnection(rtcConfig);
+            peerConnection.ontrack = (e) => { videoElement.srcObject = e.streams[0]; };
+            peerConnection.onicecandidate = (e) => { if (e.candidate) socket.emit('candidate', e.candidate); };
+        }
 
-    // シグナリングダミー関数（お使いの環境に合わせて接続）
-    function sendSignalingMessage(message) {
-      // 例: websocket.send(JSON.stringify(message));
-    }
+        socket.on('offer', async (offer) => {
+            createPeerConnection();
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit('answer', answer);
+        });
 
-    // --- 5. 簡易コメント追加機能 ---
-    function sendComment() {
-      const input = document.getElementById('commentInput');
-      const text = input.value.trim();
-      if (!text) return;
+        socket.on('answer', async (answer) => {
+            if (peerConnection) await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        });
 
-      const list = document.getElementById('commentsList');
-      const item = document.createElement('div');
-      item.className = 'comment-bubble';
-      item.textContent = '自分: ' + text;
-      list.appendChild(item);
-      
-      input.value = '';
-      list.scrollTop = list.scrollHeight; // 最下部へ自動スクロール
-    }
+        socket.on('candidate', async (candidate) => {
+            if (peerConnection) await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        });
 
-    // ページ読み込み時にカメラを起動
-    window.addEventListener('DOMContentLoaded', () => {
-      initCamera();
-    });
-  </script>
+        // チャット送信
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('btn-send-chat');
+
+        function triggerSendChat() {
+            if (chatInput.value.trim()) {
+                socket.emit('send-chat', {
+                    user: isHost ? '配信者' : userName,
+                    userId: isHost ? '' : userId,
+                    isHost: isHost,
+                    text: chatInput.value.trim()
+                });
+                chatInput.value = '';
+                chatInput.blur(); // 送信後にキーボードを自動閉じる
+            }
+        }
+
+        sendBtn.addEventListener('click', triggerSendChat);
+        chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') triggerSendChat(); });
+
+        socket.on('receive-chat', (data) => {
+            const logs = document.getElementById('chat-logs');
+            const div = document.createElement('div');
+            div.className = 'chat-item';
+            
+            const hostBadgeHtml = data.isHost ? `<span class="host-badge">HOST</span>` : '';
+            const idHtml = data.userId ? `<span class="chat-id">${data.userId}</span>` : '';
+
+            div.innerHTML = `
+                <div class="chat-header">
+                    ${hostBadgeHtml}
+                    <span class="chat-user">${data.user}</span>
+                    ${idHtml}
+                </div>
+                <div class="chat-text">${data.text}</div>
+            `;
+            logs.appendChild(div);
+            logs.scrollTop = logs.scrollHeight;
+        });
+
+        // ギフト処理（パネル内ボタン・クイックボタン共通）
+        const giftDrawer = document.getElementById('gift-drawer');
+        const toggleGiftDrawer = () => {
+            giftDrawer.style.display = (giftDrawer.style.display === 'grid') ? 'none' : 'grid';
+        };
+
+        document.getElementById('btn-panel-gift').addEventListener('click', toggleGiftDrawer);
+        quickGiftBtn.addEventListener('click', toggleGiftDrawer);
+
+        function sendGift(giftName, icon, price) {
+            giftDrawer.style.display = 'none';
+            const senderName = isHost ? '配信者' : (userName || '視聴者さん');
+            socket.emit('send-gift', { 
+                user: senderName, 
+                userId: isHost ? '' : userId, 
+                isHost: isHost,
+                giftName, 
+                icon, 
+                price 
+            });
+        }
+
+        socket.on('receive-gift', (data) => {
+            showGiftEffect(data);
+            
+            const logs = document.getElementById('chat-logs');
+            const div = document.createElement('div');
+            div.className = 'chat-item gift-notice';
+            
+            const hostBadgeHtml = data.isHost ? `<span class="host-badge">HOST</span>` : '';
+            const idHtml = data.userId ? `<span class="chat-id">${data.userId}</span>` : '';
+
+            div.innerHTML = `
+                <div class="chat-header">
+                    ${hostBadgeHtml}
+                    <span class="chat-user" style="color: #FFF;">${data.user}</span>
+                    ${idHtml}
+                </div>
+                <div class="chat-text">🎁 ${data.icon} ${data.giftName} (${data.price}) を贈りました！</div>
+            `;
+            logs.appendChild(div);
+            logs.scrollTop = logs.scrollHeight;
+        });
+
+        function showGiftEffect(data) {
+            const container = document.getElementById('effect-container');
+            const div = document.createElement('div');
+            div.className = 'gift-effect-text';
+            div.innerHTML = `${data.icon} ${data.user}さんが ${data.giftName} (${data.price}) を贈りました！`;
+            container.appendChild(div);
+            setTimeout(() => { div.remove(); }, 2200);
+        }
+    </script>
 </body>
 </html>
