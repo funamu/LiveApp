@@ -2,14 +2,14 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ライブ配信プロトタイプ</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         * { box-sizing: border-box; }
         body {
             margin: 0; padding: 0;
-            background-color: #050505;
+            background-color: #000;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             overflow: hidden;
             height: 100vh; height: 100dvh;
@@ -20,91 +20,70 @@
             position: relative;
             width: 100vw; height: 100vh; height: 100dvh;
             background: #000;
-            display: flex; flex-direction: column;
+            display: flex;
+            flex-direction: row; /* 横画面デフォルト：2カラム */
+            overflow: hidden;
+        }
+
+        /* --- 映像エリア（左側：16:9維持） --- */
+        .video-section {
+            position: relative;
+            flex: 1;
+            height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             overflow: hidden;
         }
 
         #camera-video {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            object-fit: contain;
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* バンド演奏全体を収めるため16:9のアスペクト比を保持 */
             background: #000;
-            z-index: 1;
         }
 
         /* 配信準備中・待機用オーバーレイ */
         #standby-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #000000;
-            z-index: 2; display: flex; flex-direction: column;
+            z-index: 5; display: flex; flex-direction: column;
             justify-content: center; align-items: center;
             gap: 12px; transition: opacity 0.3s ease;
         }
-        #standby-overlay h3 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
+        #standby-overlay h3 { margin: 0; font-size: 20px; font-weight: 600; }
         #standby-overlay p { margin: 0; font-size: 13px; color: #8e8e93; }
 
-        /* ニックネーム設定・変更モーダル */
-        #name-input-modal {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
-            z-index: 100; display: flex; justify-content: center; align-items: center;
+        /* 映像上のヘッダーコントロール */
+        .video-header-overlay {
+            position: absolute; top: 12px; left: 12px; right: 12px;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 10; pointer-events: none;
         }
+        .video-header-overlay > * { pointer-events: auto; }
 
-        .modal-card {
-            background: rgba(30, 30, 35, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 30px 24px; border-radius: 24px;
-            text-align: center; width: 88%; max-width: 340px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-        }
-
-        .input-field {
-            width: 100%; padding: 14px;
-            margin: 18px 0; border-radius: 14px;
-            border: 1px solid rgba(255,255,255,0.15); background: rgba(0, 0, 0, 0.5);
-            color: #fff; font-size: 15px; text-align: center; outline: none;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #FF2A54, #FF6445);
-            color: white; border: none; padding: 14px 28px;
-            font-size: 15px; font-weight: 700;
-            border-radius: 30px; cursor: pointer; width: 100%;
-            box-shadow: 0 8px 20px rgba(255, 42, 84, 0.35);
-        }
-
-        /* UIオーバーレイ */
-        .overlay-layer {
-            position: relative; z-index: 3;
-            width: 100%; height: 100%;
-            display: flex; flex-direction: column;
-            justify-content: space-between;
-            pointer-events: none; padding: 16px;
-        }
-
-        .header {
-            display: flex; align-items: center; gap: 10px;
-            background: rgba(0, 0, 0, 0.45); padding: 6px 14px; border-radius: 20px;
-            backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.08);
-            width: fit-content; pointer-events: auto;
+        .header-info {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(0, 0, 0, 0.6); padding: 6px 12px; border-radius: 20px;
+            backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
         }
         .live-badge {
             background: linear-gradient(135deg, #FF2A54, #FF0040);
             padding: 3px 8px; border-radius: 6px;
             font-size: 11px; font-weight: 800; letter-spacing: 0.5px;
         }
-
         .user-name-btn {
             font-size: 12px; font-weight: 600; color: #fff;
             background: rgba(255, 255, 255, 0.1);
-            padding: 4px 10px; border-radius: 12px;
-            cursor: pointer; display: flex; align-items: center; gap: 6px;
-            transition: background 0.2s;
+            padding: 4px 10px; border-radius: 12px; cursor: pointer;
+            display: flex; align-items: center; gap: 6px;
         }
-        .user-name-btn:active { background: rgba(255, 255, 255, 0.25); }
-        .user-id-tag { font-size: 10px; color: rgba(255, 255, 255, 0.5); font-weight: 400; }
-        
+        .user-id-tag { font-size: 10px; color: rgba(255, 255, 255, 0.5); }
+
+        .header-actions {
+            display: flex; gap: 8px; align-items: center;
+        }
         .btn-host-control {
             background: #34C759; border: none; color: white;
             padding: 6px 14px; border-radius: 16px; font-weight: 700;
@@ -112,200 +91,243 @@
         }
         .btn-host-control.is-live { background: #FF3B30; }
 
-        /* チャット ＆ ギフトエリア */
-        .bottom-section {
-            pointer-events: auto;
-            display: flex; flex-direction: column; gap: 12px;
-            max-width: 480px; width: 100%; margin: 0 auto;
+        .btn-toggle-chat {
+            background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15);
+            color: #fff; width: 34px; height: 34px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; backdrop-filter: blur(10px);
+        }
+
+        /* --- サイドパネル（右側：チャット＆ギフト） --- */
+        .side-panel {
+            width: 320px;
+            max-width: 32vw;
+            height: 100%;
+            background: #121215;
+            border-left: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            transition: margin-right 0.3s ease;
+        }
+
+        .side-panel.collapsed {
+            margin-right: -320px;
+            max-width: 0;
+            overflow: hidden;
+            border-left: none;
         }
 
         #chat-logs {
-            height: 180px; overflow-y: auto;
-            display: flex; flex-direction: column; gap: 10px;
-            padding: 6px;
-            mask-image: linear-gradient(to bottom, transparent, black 15%);
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
         }
 
-        /* TikTok風 背景なしコメントスタイル */
+        /* チャットアイテム（背景なし・2行構成） */
         .chat-item {
-            display: flex; flex-direction: column; gap: 2px;
-            width: 100%;
-            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 2px 8px rgba(0,0,0,0.6);
+            display: flex; flex-direction: column; gap: 2px; width: 100%;
         }
-
-        /* 1行目：ユーザー情報（小さめ） */
         .chat-header {
             display: flex; align-items: center; gap: 4px;
-            font-size: 11px; color: rgba(255, 255, 255, 0.75);
-            font-weight: 600;
+            font-size: 11px; color: rgba(255, 255, 255, 0.6); font-weight: 600;
         }
         .chat-user { color: #FFD166; font-weight: 700; }
-        .chat-id { font-size: 10px; color: rgba(255, 255, 255, 0.45); font-weight: 400; }
+        .chat-id { font-size: 10px; color: rgba(255, 255, 255, 0.4); }
         .host-badge {
             background: #FF2A54; color: #fff; font-size: 9px; font-weight: 800;
-            padding: 1px 5px; border-radius: 4px; text-shadow: none;
+            padding: 1px 5px; border-radius: 4px;
         }
-
-        /* 2行目：コメント本文 */
         .chat-text {
-            font-size: 14px; font-weight: 600; color: #ffffff;
-            line-height: 1.3; word-break: break-all;
+            font-size: 13.5px; font-weight: 500; color: #ffffff;
+            line-height: 1.35; word-break: break-all;
         }
 
-        /* 2行構成のギフトシステムメッセージ */
+        /* ギフトメッセージ */
         .chat-item.gift-notice {
-            background: linear-gradient(135deg, rgba(255, 42, 84, 0.45), rgba(255, 123, 0, 0.45));
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 8px 14px; border-radius: 16px;
-            backdrop-filter: blur(8px);
-            text-shadow: none; width: fit-content;
+            background: linear-gradient(135deg, rgba(255, 42, 84, 0.25), rgba(255, 123, 0, 0.25));
+            border: 1px solid rgba(255, 42, 84, 0.4);
+            padding: 8px 12px; border-radius: 12px;
         }
         .gift-notice .chat-text {
-            font-size: 13.5px; font-weight: 700; color: #FFF;
+            font-size: 13px; font-weight: 700; color: #FFF;
         }
 
-        /* 操作バー */
+        /* チャット・ギフト操作バー */
         .action-bar {
+            padding: 12px;
+            background: #1a1a1e;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
             display: flex; gap: 8px; align-items: center;
-            background: rgba(20, 20, 25, 0.65);
-            padding: 6px 6px 6px 16px; border-radius: 30px;
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.12);
         }
         #chat-input {
-            flex: 1; background: transparent; border: none;
-            color: #fff; font-size: 14px; outline: none;
+            flex: 1; background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 10px 14px; border-radius: 20px;
+            color: #fff; font-size: 13px; outline: none;
         }
-        #chat-input::placeholder { color: rgba(255,255,255,0.4); }
+        #chat-input::placeholder { color: rgba(255,255,255,0.35); }
 
         .icon-btn {
             background: transparent; border: none;
-            width: 38px; height: 38px; border-radius: 50%;
+            width: 36px; height: 36px; border-radius: 50%;
             display: flex; justify-content: center; align-items: center;
-            cursor: pointer; transition: transform 0.15s, background 0.2s;
-            flex-shrink: 0; color: #fff;
+            cursor: pointer; flex-shrink: 0; color: #fff;
         }
-        .icon-btn:active { transform: scale(0.9); }
         .icon-btn-send { background: #fff; color: #000; }
         .icon-btn-gift {
             background: linear-gradient(135deg, #FF2A54, #FF7B00);
-            box-shadow: 0 4px 12px rgba(255, 42, 84, 0.3);
         }
 
-        /* ギフトドロワー */
+        /* ギフト選択ドロワー（右下にポップアップ） */
         #gift-drawer {
-            display: none;
-            position: absolute; bottom: 85px; right: 16px; left: 16px;
-            max-width: 400px; margin: 0 auto;
-            background: rgba(25, 25, 30, 0.92);
-            border-radius: 24px; padding: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            grid-template-columns: repeat(2, 1fr); gap: 10px;
-            z-index: 10; pointer-events: auto;
-            backdrop-filter: blur(20px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.7);
+            display: none; position: absolute; bottom: 65px; right: 12px; left: 12px;
+            background: rgba(25, 25, 30, 0.95); border-radius: 20px; padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            grid-template-columns: repeat(2, 1fr); gap: 8px;
+            z-index: 20; backdrop-filter: blur(20px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
-
         .gift-card {
-            background: rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 14px;
-            text-align: center; cursor: pointer;
-            border: 1px solid rgba(255, 255, 255, 0.05); transition: background 0.2s, transform 0.1s;
+            background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 10px;
+            text-align: center; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.05);
         }
-        .gift-card:active { transform: scale(0.96); background: rgba(255, 255, 255, 0.12); }
-        .gift-icon { font-size: 32px; margin-bottom: 4px; }
-        .gift-name { font-size: 13px; font-weight: 700; color: #eee; }
-        .gift-price { font-size: 12px; color: #FFB340; font-weight: 700; margin-top: 2px; }
+        .gift-card:active { background: rgba(255, 255, 255, 0.15); }
+        .gift-icon { font-size: 24px; margin-bottom: 2px; }
+        .gift-name { font-size: 11px; font-weight: 700; color: #eee; }
+        .gift-price { font-size: 10px; color: #FFB340; font-weight: 700; }
 
-        /* エフェクト表示 */
+        /* ギフト中央エフェクト（演奏を邪魔しない下寄り配置） */
         #effect-container {
-            position: absolute; top: 35%; left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 20; pointer-events: none;
-            text-align: center; width: 100%;
+            position: absolute; bottom: 15%; left: 50%;
+            transform: translateX(-50%);
+            z-index: 30; pointer-events: none; text-align: center; width: 100%;
         }
         .gift-effect-text {
-            font-size: 26px; font-weight: 900; color: #FFF;
-            text-shadow: 0 4px 20px rgba(255, 42, 84, 0.8);
+            font-size: 22px; font-weight: 900; color: #FFF;
+            text-shadow: 0 4px 16px rgba(255, 42, 84, 0.9), 0 0 10px #000;
             animation: popUp 2.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         @keyframes popUp {
-            0% { opacity: 0; transform: scale(0.4) translateY(30px); }
-            15% { opacity: 1; transform: scale(1.05) translateY(0); }
+            0% { opacity: 0; transform: scale(0.5) translateY(20px); }
+            15% { opacity: 1; transform: scale(1) translateY(0); }
             80% { opacity: 1; transform: scale(1) translateY(0); }
-            100% { opacity: 0; transform: scale(0.9) translateY(-40px); }
+            100% { opacity: 0; transform: scale(0.9) translateY(-20px); }
+        }
+
+        /* ニックネーム変更モーダル */
+        #name-input-modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
+            z-index: 100; display: flex; justify-content: center; align-items: center;
+        }
+        .modal-card {
+            background: rgba(30, 30, 35, 0.95); border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 24px; border-radius: 20px; text-align: center; width: 88%; max-width: 320px;
+        }
+        .input-field {
+            width: 100%; padding: 12px; margin: 16px 0; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.15); background: rgba(0, 0, 0, 0.5);
+            color: #fff; font-size: 14px; text-align: center; outline: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #FF2A54, #FF6445);
+            color: white; border: none; padding: 12px 24px; font-size: 14px; font-weight: 700;
+            border-radius: 24px; cursor: pointer; width: 100%;
+        }
+
+        /* --- スマホ縦画面用レスポンシブ（上下2段構成） --- */
+        @media (max-aspect-ratio: 1/1) {
+            #app-container { flex-direction: column; }
+            .video-section { height: 40vh; flex: none; }
+            .side-panel {
+                width: 100%; max-width: 100%; flex: 1;
+                border-left: none; border-top: 1px solid rgba(255,255,255,0.08);
+            }
+            .side-panel.collapsed { margin-right: 0; margin-bottom: -100%; height: 0; }
         }
     </style>
 </head>
 <body>
 
     <div id="app-container">
-        <!-- 待機・準備中画面 -->
-        <div id="standby-overlay">
-            <h3 id="standby-title">配信準備中</h3>
-            <p id="standby-desc">配信者が準備を開くのをお待ちください...</p>
-        </div>
-
-        <!-- ニックネーム設定・変更モーダル -->
-        <div id="name-input-modal" style="display: none;">
-            <div class="modal-card">
-                <h3 style="margin:0 0 8px 0; font-size:18px;">ニックネームの設定</h3>
-                <p style="font-size: 12px; color: #8e8e93; margin:0;">コメントやギフトに表示されるお名前です</p>
-                <input type="text" id="username-input" class="input-field" placeholder="例: ゲスト" maxlength="12">
-                <button class="btn-primary" id="btn-save-name">保存して参加</button>
+        <!-- 映像エリア（左） -->
+        <div class="video-section">
+            <div id="standby-overlay">
+                <h3 id="standby-title">配信準備中</h3>
+                <p id="standby-desc">配信者が準備を開くのをお待ちください...</p>
             </div>
-        </div>
 
-        <video id="camera-video" autoplay playsinline muted></video>
-
-        <div class="overlay-layer">
-            <div class="header">
-                <span class="live-badge" id="live-badge">OFFLINE</span>
-                <div class="user-name-btn" id="btn-edit-name">
-                    <span id="role-display">接続中...</span>
-                    <span id="user-id-display" class="user-id-tag"></span>
+            <div class="video-header-overlay">
+                <div class="header-info">
+                    <span class="live-badge" id="live-badge">OFFLINE</span>
+                    <div class="user-name-btn" id="btn-edit-name">
+                        <span id="role-display">接続中...</span>
+                        <span id="user-id-display" class="user-id-tag"></span>
+                    </div>
                 </div>
-                <button id="btn-host-toggle" class="btn-host-control" style="display: none;">配信開始</button>
+
+                <div class="header-actions">
+                    <button id="btn-host-toggle" class="btn-host-control" style="display: none;">配信開始</button>
+                    <button id="btn-toggle-chat" class="btn-toggle-chat" title="チャットの表示切替">💬</button>
+                </div>
             </div>
 
+            <video id="camera-video" autoplay playsinline muted></video>
             <div id="effect-container"></div>
+        </div>
 
-            <div id="gift-drawer">
-                <div class="gift-card" onclick="sendGift('応援', '📣', '￥500')">
-                    <div class="gift-icon">📣</div>
-                    <div class="gift-name">応援</div>
-                    <div class="gift-price">￥500</div>
-                </div>
-                <div class="gift-card" onclick="sendGift('アルコール', '🍺', '￥1,000')">
-                    <div class="gift-icon">🍺</div>
-                    <div class="gift-name">アルコール</div>
-                    <div class="gift-price">￥1,000</div>
-                </div>
-                <div class="gift-card" onclick="sendGift('ウイスキー', '🥃', '￥3,000')">
-                    <div class="gift-icon">🥃</div>
-                    <div class="gift-name">ウイスキー</div>
-                    <div class="gift-price">￥3,000</div>
-                </div>
-                <div class="gift-card" onclick="sendGift('シャンパン', '🍾', '￥10,000')">
-                    <div class="gift-icon">🍾</div>
-                    <div class="gift-name">シャンパン</div>
-                    <div class="gift-price">￥1,000</div>
-                </div>
-            </div>
+        <!-- サイドパネル：チャット＆ギフト（右） -->
+        <div class="side-panel" id="side-panel">
+            <div id="chat-logs"></div>
 
-            <div class="bottom-section">
-                <div id="chat-logs"></div>
+            <div style="position: relative;">
+                <div id="gift-drawer">
+                    <div class="gift-card" onclick="sendGift('応援', '📣', '￥500')">
+                        <div class="gift-icon">📣</div>
+                        <div class="gift-name">応援</div>
+                        <div class="gift-price">￥500</div>
+                    </div>
+                    <div class="gift-card" onclick="sendGift('アルコール', '🍺', '￥1,000')">
+                        <div class="gift-icon">🍺</div>
+                        <div class="gift-name">アルコール</div>
+                        <div class="gift-price">￥1,000</div>
+                    </div>
+                    <div class="gift-card" onclick="sendGift('ウイスキー', '🥃', '￥3,000')">
+                        <div class="gift-icon">🥃</div>
+                        <div class="gift-name">ウイスキー</div>
+                        <div class="gift-price">￥3,000</div>
+                    </div>
+                    <div class="gift-card" onclick="sendGift('シャンパン', '🍾', '￥10,000')">
+                        <div class="gift-icon">🍾</div>
+                        <div class="gift-name">シャンパン</div>
+                        <div class="gift-price">￥10,000</div>
+                    </div>
+                </div>
+
                 <div class="action-bar">
                     <input type="text" id="chat-input" placeholder="コメントを入力..." maxlength="50">
-                    
-                    <button class="icon-btn icon-btn-send" id="btn-send-chat" title="送信">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    <button class="icon-btn icon-btn-send" id="btn-send-chat">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
-                    
-                    <button class="icon-btn icon-btn-gift" id="btn-toggle-gift" title="ギフト">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+                    <button class="icon-btn icon-btn-gift" id="btn-toggle-gift">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- ニックネーム設定モーダル -->
+    <div id="name-input-modal" style="display: none;">
+        <div class="modal-card">
+            <h3 style="margin:0 0 6px 0; font-size:16px;">ニックネームの設定</h3>
+            <p style="font-size: 11px; color: #8e8e93; margin:0;">表示されるお名前です</p>
+            <input type="text" id="username-input" class="input-field" placeholder="例: ゲスト" maxlength="12">
+            <button class="btn-primary" id="btn-save-name">保存して参加</button>
         </div>
     </div>
 
@@ -342,6 +364,11 @@
             }
         });
 
+        // チャットパネルの開閉（シアターモード）
+        document.getElementById('btn-toggle-chat').addEventListener('click', () => {
+            document.getElementById('side-panel').classList.toggle('collapsed');
+        });
+
         document.getElementById('btn-edit-name').addEventListener('click', () => {
             if (isHost) return;
             document.getElementById('username-input').value = userName;
@@ -373,13 +400,23 @@
                 standbyOverlay.style.display = 'none';
 
                 try {
+                    // カメラ・マイクの初期化
                     localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
                     videoElement.srcObject = localStream;
+                    
+                    // 初期状態（準備中）はマイク・映像のトラックを完全にOFF（消音・ブラックアウト）
+                    setTracksEnabled(false);
+
                 } catch (err) { alert("カメラ起動エラー: " + err); }
 
                 hostBtn.addEventListener('click', () => {
                     isBroadcasting = !isBroadcasting;
+                    
+                    // 配信状態に応じてトラック（音声・映像）の有効化/無効化を即座に切り替え
+                    setTracksEnabled(isBroadcasting);
+                    
                     socket.emit('toggle-stream', isBroadcasting);
+
                     if (isBroadcasting) {
                         hostBtn.innerText = '配信停止';
                         hostBtn.classList.add('is-live');
@@ -405,6 +442,15 @@
                 initViewerMode();
             }
         });
+
+        // 音声・映像トラックの完全有効/無効化ロジック
+        function setTracksEnabled(enabled) {
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    track.enabled = enabled;
+                });
+            }
+        }
 
         function initViewerMode() {
             if (!userName) {
@@ -466,6 +512,9 @@
                     text: chatInput.value.trim()
                 });
                 chatInput.value = '';
+                
+                // 横向きスマホキーボード対策：送信後に自動でフォーカスを外してキーボードを閉じる
+                chatInput.blur();
             }
         }
 
@@ -521,7 +570,6 @@
             const hostBadgeHtml = data.isHost ? `<span class="host-badge">HOST</span>` : '';
             const idHtml = data.userId ? `<span class="chat-id">${data.userId}</span>` : '';
 
-            // コメント同様に「1行目：ユーザー情報」「2行目：ギフト内容」の2行構成に統一
             div.innerHTML = `
                 <div class="chat-header">
                     ${hostBadgeHtml}
@@ -538,7 +586,7 @@
             const container = document.getElementById('effect-container');
             const div = document.createElement('div');
             div.className = 'gift-effect-text';
-            div.innerHTML = `${data.icon} ${data.user}さんが<br>${data.giftName} (${data.price}) を贈りました！`;
+            div.innerHTML = `${data.icon} ${data.user}さんが ${data.giftName} (${data.price}) を贈りました！`;
             container.appendChild(div);
             setTimeout(() => { div.remove(); }, 2200);
         }
