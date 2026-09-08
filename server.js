@@ -8,16 +8,49 @@ const io = new Server(server);
 
 app.use(express.static(__dirname));
 
-io.on('connection', (socket) => {
-    console.log('ユーザーが接続しました:', socket.id);
+let currentBroadcaster = null;
+let isBroadcasting = false; // 配信開始フラグ
+const SECRET_HOST_KEY = 'secret123';
 
-    // 視聴者から「配信者の映像がほしい」という合図を受け取ったら、全員（配信者）に伝える
-    socket.on('request-offer', () => {
-        console.log('視聴者からのリクエストを中継します');
-        socket.broadcast.emit('request-offer');
+io.on('connection', (socket) => {
+    console.log('ユーザー接続:', socket.id);
+
+    // 視聴者接続時に現在の配信状態を伝える
+    socket.emit('broadcaster-status', { hasBroadcaster: !!currentBroadcaster, isBroadcasting });
+
+    // 配信者リクエスト
+    socket.on('register-broadcaster', (key) => {
+        if (key === SECRET_HOST_KEY) {
+            if (!currentBroadcaster || currentBroadcaster === socket.id) {
+                currentBroadcaster = socket.id;
+                isBroadcasting = false;
+                socket.emit('broadcaster-approved', { success: true });
+                io.emit('broadcaster-status', { hasBroadcaster: true, isBroadcasting: false });
+                console.log('配信者を認証:', socket.id);
+            } else {
+                socket.emit('broadcaster-approved', { success: false, reason: 'すでに他の配信者が接続中です。' });
+            }
+        } else {
+            socket.emit('broadcaster-approved', { success: false, reason: '認証キーが無効です。' });
+        }
     });
 
-    // WebRTCのシグナリング中継
+    // 配信開始・停止のトグル切替
+    socket.on('toggle-stream', (status) => {
+        if (socket.id === currentBroadcaster) {
+            isBroadcasting = status;
+            io.emit('broadcaster-status', { hasBroadcaster: true, isBroadcasting });
+            console.log('配信ステータス変更:', isBroadcasting ? '配信中' : '準備中');
+        }
+    });
+
+    // WebRTCシグナリング
+    socket.on('request-offer', () => {
+        if (currentBroadcaster) {
+            io.to(currentBroadcaster).emit('request-offer-from', socket.id);
+        }
+    });
+
     socket.on('offer', (data) => {
         socket.broadcast.emit('offer', data);
     });
@@ -30,13 +63,17 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('candidate', data);
     });
 
-    // ギフト機能の共有
-    socket.on('send-gift', (data) => {
-        io.emit('receive-gift', data);
-    });
+    // チャット＆ギフト
+    socket.on('send-chat', (data) => io.emit('receive-chat', data));
+    socket.on('send-gift', (data) => io.emit('receive-gift', data));
 
     socket.on('disconnect', () => {
-        console.log('ユーザーが切断しました:', socket.id);
+        if (socket.id === currentBroadcaster) {
+            currentBroadcaster = null;
+            isBroadcasting = false;
+            io.emit('broadcaster-status', { hasBroadcaster: false, isBroadcasting: false });
+            console.log('配信者が切断しました');
+        }
     });
 });
 
