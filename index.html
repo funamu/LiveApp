@@ -2,133 +2,195 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <!-- スマホ表示の崩れを防ぐための超重要タグ -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ライブ配信</title>
+  <title>ライブ配信アプリ</title>
   <style>
-    /* CSSの共通リセット（隙間やはみ出しを防止） */
+    /* ========== ベース設定 ========== */
     * {
-      box-sizing: border-box; /* 枠線や余白を含めてサイズ指定する設定 */
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
 
     body {
-      background-color: #000;
-      color: #fff;
-      font-family: sans-serif;
-      overflow: hidden; /* 画面全体のスワイプブレを防止 */
+      background-color: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      overflow-x: hidden;
     }
 
-    /* 配信者の画面エリア（常にカメラを表示） */
-    .broadcaster-container {
-      padding: 10px;
-      background: #1a1a1a;
-      text-align: center;
-    }
-
-    .broadcaster-container video {
+    /* メインコンテナ */
+    .app-container {
       width: 100%;
-      max-width: 400px;
-      border-radius: 8px;
-      background: #333;
-    }
-
-    /* -------------------------------------------------- */
-    /* 視聴者スマホ用レイアウト（横はみ出し徹底防止版） */
-    /* -------------------------------------------------- */
-    .viewer-mobile-container {
+      max-width: 500px; /* スマホ表示用枠 */
+      min-height: 100dvh;
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
-      width: 100%;
-      height: 100dvh; /* スマホ画面の高さぴったりに合わせる */
-      max-width: 480px; /* パソコンで見てもスマホ幅に維持 */
-      margin: 0 auto;
+      background-color: #000000;
       position: relative;
-      background-color: #000;
-      overflow: hidden; /* 子要素のはみ出しをシャットアウト */
     }
 
-    /* 1. 映像エリア */
-    .video-wrapper {
-      position: relative;
-      flex: 1; /* 余った縦幅をすべて使う */
-      width: 100%;
+    /* ========== 画面切り替えタブ（確認用） ========== */
+    .view-switch {
       display: flex;
-      justify-content: center;
-      align-items: center;
+      background: #1e1e1e;
+      border-bottom: 1px solid #333;
+      z-index: 100;
+    }
+
+    .view-switch button {
+      flex: 1;
+      padding: 10px;
+      background: none;
+      border: none;
+      color: #888;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .view-switch button.active {
+      color: #fff;
+      border-bottom: 2px solid #ff4081;
+      background: #252525;
+    }
+
+    /* 各画面の表示制御 */
+    .screen {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      height: calc(100dvh - 41px); /* タブの高さを差し引く */
+      position: relative;
       overflow: hidden;
     }
 
-    .video-wrapper video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover; /* 画面いっぱいに映像を表示 */
+    .screen.active {
+      display: flex;
     }
 
-    /* 2. コメントエリア（表示時） */
+    /* ========== 映像表示エリア (共通) ========== */
+    .video-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* ========== 配信者画面レイアウト ========== */
+    .broadcaster-controls {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      padding: 0 16px;
+      z-index: 20;
+    }
+
+    .btn-start-live {
+      width: 100%;
+      max-width: 300px;
+      height: 48px;
+      border-radius: 24px;
+      border: none;
+      background: linear-gradient(45deg, #ff4081, #ff80ab);
+      color: #fff;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(255, 64, 129, 0.4);
+    }
+
+    .btn-start-live:active {
+      transform: scale(0.98);
+    }
+
+    /* ========== 視聴者画面レイアウト ========== */
+    /* コメントコンテナ (画面下部に配置) */
     .comments-container {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      max-height: 45%; /* コメントエリアの高さを制限 */
       display: flex;
       flex-direction: column;
-      width: 100%; /* 横幅ぴったり */
-      max-height: 45dvh; /* 画面高さの45%までに制限 */
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(8px);
+      background: linear-gradient(to top, rgba(0,0,0,0.85) 70%, rgba(0,0,0,0));
       z-index: 10;
     }
 
-    /* コメント一覧（縦スクロール） */
+    /* コメント一覧 (スクロール可能) */
     .comments-list {
       flex: 1;
       overflow-y: auto;
-      padding: 10px;
+      padding: 12px 16px;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      font-size: 14px;
+      -webkit-overflow-scrolling: touch;
     }
 
-    .comment-item {
-      background: rgba(255, 255, 255, 0.15);
-      padding: 6px 10px;
-      border-radius: 12px;
-      width: fit-content;
-      max-width: 90%;
+    .comment-bubble {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(4px);
+      padding: 6px 12px;
+      border-radius: 14px;
+      font-size: 13px;
+      color: #fff;
+      align-self: flex-start;
+      max-width: 85%;
       word-break: break-all;
     }
 
-    /* 3. 下部の入力＆ボタンエリア（横並びで右端オーバーを防ぐ） */
+    /* ★画面外にはみ出さないように修正した入力バー ★ */
     .comment-input-bar {
       display: flex;
       align-items: center;
-      gap: 8px; /* 要素同士のすき間 */
-      padding: 8px 12px;
-      background: rgba(0, 0, 0, 0.9);
+      gap: 8px;
+      padding: 10px 12px;
+      background: #000;
       width: 100%;
-      box-sizing: border-box; /* 横幅オーバーを強力に防止 */
+      box-sizing: border-box; /* 横幅固定の肝 */
     }
 
-    /* テキスト入力欄：自動で横幅を伸縮させる */
+    /* 入力エリア：画面幅に合わせて可変縮小 */
     .comment-input-bar input {
-      flex: 1; /* 使える横幅をいっぱいまで伸ばす */
-      min-width: 0; /* フレックスボックス内で縮小できるようにするおまじない */
-      height: 40px;
-      border-radius: 20px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      padding: 0 12px;
+      flex: 1;
+      min-width: 0; /* フレックスボックスでの文字あふれ防止 */
+      height: 38px;
+      border-radius: 19px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 0 14px;
       background: rgba(255, 255, 255, 0.1);
       color: #fff;
       font-size: 14px;
       outline: none;
     }
 
-    /* 送信ボタン・ギフトボタン共通：サイズを固定して潰れないようにする */
-    .send-button,
-    .gift-button {
-      flex-shrink: 0; /* 横幅が狭くなっても潰れない設定 */
-      height: 40px;
-      border-radius: 20px;
+    .comment-input-bar input::placeholder {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    /* 各種ボタン：画面外に押し出されないようサイズ固定 */
+    .btn-send,
+    .btn-gift {
+      flex-shrink: 0; /* 縮小・はみ出しを防止 */
+      height: 38px;
       border: none;
+      border-radius: 19px;
       font-weight: bold;
       cursor: pointer;
       display: flex;
@@ -136,15 +198,15 @@
       justify-content: center;
     }
 
-    .send-button {
+    .btn-send {
       padding: 0 14px;
-      background: #007bff;
+      background: #2196F3;
       color: #fff;
       font-size: 13px;
     }
 
-    .gift-button {
-      width: 40px;
+    .btn-gift {
+      width: 38px;
       background: #ff4081;
       font-size: 18px;
     }
@@ -152,43 +214,52 @@
 </head>
 <body>
 
-  <!-- ==================== 配信者用エリア ==================== -->
-  <div class="broadcaster-container">
-    <h3>配信者画面（常に映像確認可能）</h3>
-    <!-- ページを開いた時点でカメラが起動して映ります -->
-    <video id="localVideo" autoplay playsinline muted></video>
-    <br>
-    <button id="startLiveBtn" style="margin-top:8px; padding:8px 16px;">配信開始</button>
-  </div>
-
-  <hr style="border-color: #333; margin: 20px 0;">
-
-  <!-- ==================== 視聴者用エリア ==================== -->
-  <div class="viewer-mobile-container">
-    <!-- 配信映像エリア -->
-    <div class="video-wrapper">
-      <video id="remoteVideo" autoplay playsinline></video>
+  <div class="app-container">
+    <!-- 画面切替用タブ -->
+    <div class="view-switch">
+      <button id="tabBroadcaster" class="active" onclick="switchTab('broadcaster')">配信者画面</button>
+      <button id="tabViewer" onclick="switchTab('viewer')">視聴者画面</button>
     </div>
 
-    <!-- コメント表示・入力エリア -->
-    <div class="comments-container">
-      <!-- コメント一覧（内側でスクロール） -->
-      <div class="comments-list">
-        <div class="comment-item">ユーザーA: こんにちは！</div>
-        <div class="comment-item">ユーザーB: 映像見えていますか？</div>
+    <!-- ================= 1. 配信者画面 ================= -->
+    <div id="broadcasterScreen" class="screen active">
+      <div class="video-container">
+        <!-- ページ起動時からカメラ映像が常時表示されます（画角調整用） -->
+        <video id="localVideo" autoplay playsinline muted></video>
+        
+        <div class="broadcaster-controls">
+          <button id="startLiveBtn" class="btn-start-live" onclick="startBroadcasting()">配信を開始する</button>
+        </div>
       </div>
+    </div>
 
-      <!-- 下部操作バー（入力欄・送信・ギフトが右端に溢れないよう調整済み） -->
-      <div class="comment-input-bar">
-        <input type="text" placeholder="コメントを入力..." />
-        <button class="send-button">送信</button>
-        <button class="gift-button" aria-label="ギフトを送る">🎁</button>
+    <!-- ================= 2. 視聴者画面 ================= -->
+    <div id="viewerScreen" class="screen">
+      <div class="video-container">
+        <!-- 配信者からの映像が受信されて表示される部分 -->
+        <video id="remoteVideo" autoplay playsinline></video>
+
+        <!-- コメント＆操作エリア -->
+        <div class="comments-container">
+          <div class="comments-list" id="commentsList">
+            <div class="comment-bubble">運営: ライブ配信へようこそ！</div>
+            <div class="comment-bubble">視聴者A: こんにちは！</div>
+          </div>
+
+          <!-- 右端にはみ出さないよう調整した下部バー -->
+          <div class="comment-input-bar">
+            <input type="text" id="commentInput" placeholder="コメントを入力..." />
+            <button class="btn-send" onclick="sendComment()">送信</button>
+            <button class="btn-gift" aria-label="ギフト">🎁</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ==================== JavaScript処理 ==================== -->
+  <!-- ================= スクリプト処理 ================= -->
   <script>
+    // 要素の取得
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
     const startLiveBtn = document.getElementById('startLiveBtn');
@@ -200,25 +271,41 @@
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     };
 
-    // ① 配信者側：ページを開いた時点でカメラを起動して画角確認できるようにする
+    // --- 1. タブ切り替え（確認用） ---
+    function switchTab(type) {
+      document.getElementById('broadcasterScreen').classList.remove('active');
+      document.getElementById('viewerScreen').classList.remove('active');
+      document.getElementById('tabBroadcaster').classList.remove('active');
+      document.getElementById('tabViewer').classList.remove('active');
+
+      if (type === 'broadcaster') {
+        document.getElementById('broadcasterScreen').classList.add('active');
+        document.getElementById('tabBroadcaster').classList.add('active');
+      } else {
+        document.getElementById('viewerScreen').classList.add('active');
+        document.getElementById('tabViewer').classList.add('active');
+      }
+    }
+
+    // --- 2. 配信者側：カメラ起動（常時表示用） ---
     async function initCamera() {
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if (localVideo) {
-          localVideo.srcObject = localStream;
+          localVideo.srcObject = localStream; // 配信開始前でもカメラを表示
         }
       } catch (error) {
-        console.error('カメラ・マイクの読み込みに失敗しました:', error);
+        console.error('カメラ・マイクの起動に失敗しました:', error);
       }
     }
 
-    // ② 配信開始ボタンを押した時に視聴者へ送信を開始する処理
+    // --- 3. 配信開始処理（視聴者へトラックを送信） ---
     async function startBroadcasting() {
       if (!localStream) await initCamera();
 
       peerConnection = new RTCPeerConnection(rtcConfiguration);
 
-      // 映像と音声を送信対象に追加
+      // ローカルの映像・音声トラックを確実に追加
       localStream.getTracks().forEach((track) => {
         peerConnection.addTrack(track, localStream);
       });
@@ -232,17 +319,21 @@
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
       sendSignalingMessage({ type: 'offer', sdp: peerConnection.localDescription });
+
+      startLiveBtn.innerText = "配信中";
+      startLiveBtn.style.background = "#4CAF50";
     }
 
-    // ③ 視聴者側：配信者の映像を受信して表示する処理
+    // --- 4. 視聴者側：映像受信処理 ---
     async function handleReceiveOffer(offerSdp) {
       if (!peerConnection) {
         peerConnection = new RTCPeerConnection(rtcConfiguration);
       }
 
+      // トラックを受信したら視聴者のvideo要素にセット
       peerConnection.ontrack = (event) => {
         if (remoteVideo && !remoteVideo.srcObject) {
-          remoteVideo.srcObject = event.streams[0]; // 映像をセット
+          remoteVideo.srcObject = event.streams[0];
         }
       };
 
@@ -258,17 +349,31 @@
       sendSignalingMessage({ type: 'answer', sdp: peerConnection.localDescription });
     }
 
-    // ※環境に合わせてシグナリングサーバー連携部分を設定してください
+    // シグナリングダミー関数（お使いの環境に合わせて接続）
     function sendSignalingMessage(message) {
-      // 例: socket.emit('message', message); など
+      // 例: websocket.send(JSON.stringify(message));
     }
 
-    // 画面読み込み時にカメラ起動
-    initCamera();
+    // --- 5. 簡易コメント追加機能 ---
+    function sendComment() {
+      const input = document.getElementById('commentInput');
+      const text = input.value.trim();
+      if (!text) return;
 
-    if (startLiveBtn) {
-      startLiveBtn.addEventListener('click', startBroadcasting);
+      const list = document.getElementById('commentsList');
+      const item = document.createElement('div');
+      item.className = 'comment-bubble';
+      item.textContent = '自分: ' + text;
+      list.appendChild(item);
+      
+      input.value = '';
+      list.scrollTop = list.scrollHeight; // 最下部へ自動スクロール
     }
+
+    // ページ読み込み時にカメラを起動
+    window.addEventListener('DOMContentLoaded', () => {
+      initCamera();
+    });
   </script>
 </body>
 </html>
