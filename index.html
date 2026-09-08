@@ -11,46 +11,36 @@
             margin: 0; padding: 0;
             background-color: #000;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            height: 100%;
-            height: 100dvh;
-            overflow: hidden;
-            color: #fff;
+            height: 100%; height: 100dvh;
+            overflow: hidden; color: #fff;
         }
 
         #app-container {
             position: relative;
-            width: 100vw;
-            height: 100%;
-            height: 100dvh;
+            width: 100vw; height: 100%; height: 100dvh;
             background: #000;
-            display: flex;
-            flex-direction: row;
+            display: flex; flex-direction: row;
             overflow: hidden;
         }
 
-        /* --- 映像エリア（左側 / スマホ時上部） --- */
+        /* --- 映像エリア --- */
         .video-section {
             position: relative;
-            flex: 1;
-            height: 100%;
+            flex: 1; height: 100%;
             background: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            display: flex; justify-content: center; align-items: center;
             overflow: hidden;
         }
 
         #camera-video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background: #000;
+            width: 100%; height: 100%;
+            object-fit: contain; background: #000;
         }
 
-        /* 配信準備中・待機用オーバーレイ（視聴者のみ表示） */
+        /* 待機用オーバーレイ */
         #standby-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.9);
             z-index: 5; display: flex; flex-direction: column;
             justify-content: center; align-items: center;
             gap: 12px; transition: opacity 0.3s ease;
@@ -58,7 +48,7 @@
         #standby-overlay h3 { margin: 0; font-size: 20px; font-weight: 600; }
         #standby-overlay p { margin: 0; font-size: 13px; color: #8e8e93; }
 
-        /* 映像上のヘッダーコントロール */
+        /* ヘッダーコントロール */
         .video-header-overlay {
             position: absolute; top: 12px; left: 12px; right: 12px;
             display: flex; justify-content: space-between; align-items: center;
@@ -72,13 +62,11 @@
             backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
         }
         .live-badge {
-            background: #8e8e93;
-            padding: 3px 8px; border-radius: 6px;
+            background: #8e8e93; padding: 3px 8px; border-radius: 6px;
             font-size: 11px; font-weight: 800; letter-spacing: 0.5px;
         }
-        .live-badge.is-live {
-            background: linear-gradient(135deg, #FF2A54, #FF0040);
-        }
+        .live-badge.is-live { background: linear-gradient(135deg, #FF2A54, #FF0040); }
+        
         .user-name-btn {
             font-size: 12px; font-weight: 600; color: #fff;
             background: rgba(255, 255, 255, 0.1);
@@ -87,9 +75,7 @@
         }
         .user-id-tag { font-size: 10px; color: rgba(255, 255, 255, 0.5); }
 
-        .header-actions {
-            display: flex; gap: 8px; align-items: center;
-        }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
         .btn-host-control {
             background: #34C759; border: none; color: white;
             padding: 6px 14px; border-radius: 16px; font-weight: 700;
@@ -104,7 +90,6 @@
             cursor: pointer; backdrop-filter: blur(10px); font-size: 16px;
         }
 
-        /* 映像右下の「クイックギフトボタン」（非表示モード時に表示） */
         .btn-floating-gift {
             position: absolute; bottom: 16px; right: 16px;
             width: 44px; height: 44px; border-radius: 50%;
@@ -115,85 +100,48 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             transition: transform 0.2s;
         }
-        .btn-floating-gift:active { transform: scale(0.92); }
 
-        /* --- サイドパネル（チャット＆ギフト） --- */
+        /* --- サイドパネル --- */
         .side-panel {
-            width: 320px;
-            max-width: 32vw;
-            height: 100%;
-            background: #121215;
-            border-left: 1px solid rgba(255,255,255,0.08);
-            display: flex;
-            flex-direction: column;
-            z-index: 10;
-            transition: all 0.3s ease;
-            flex-shrink: 0;
+            width: 320px; max-width: 32vw; height: 100%;
+            background: #121215; border-left: 1px solid rgba(255,255,255,0.08);
+            display: flex; flex-direction: column; z-index: 10;
+            transition: all 0.3s ease; flex-shrink: 0;
         }
 
         .side-panel.collapsed {
-            width: 0 !important;
-            max-width: 0 !important;
-            overflow: hidden;
-            border-left: none;
-            border-top: none;
+            width: 0 !important; max-width: 0 !important;
+            overflow: hidden; border-left: none;
         }
 
         #chat-logs {
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding: 16px;
+            flex: 1; min-height: 0; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 12px; padding: 16px;
         }
 
-        /* チャットアイテム */
-        .chat-item {
-            display: flex; flex-direction: column; gap: 2px; width: 100%;
-        }
-        .chat-header {
-            display: flex; align-items: center; gap: 4px;
-            font-size: 11px; color: rgba(255, 255, 255, 0.6); font-weight: 600;
-        }
+        .chat-item { display: flex; flex-direction: column; gap: 2px; width: 100%; }
+        .chat-header { display: flex; align-items: center; gap: 4px; font-size: 11px; color: rgba(255, 255, 255, 0.6); font-weight: 600; }
         .chat-user { color: #FFD166; font-weight: 700; }
         .chat-id { font-size: 10px; color: rgba(255, 255, 255, 0.4); }
-        .host-badge {
-            background: #FF2A54; color: #fff; font-size: 9px; font-weight: 800;
-            padding: 1px 5px; border-radius: 4px;
-        }
-        .chat-text {
-            font-size: 13.5px; font-weight: 500; color: #ffffff;
-            line-height: 1.35; word-break: break-all;
-        }
+        .host-badge { background: #FF2A54; color: #fff; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 4px; }
+        .chat-text { font-size: 13.5px; font-weight: 500; color: #ffffff; line-height: 1.35; word-break: break-all; }
 
-        /* ギフトメッセージ */
         .chat-item.gift-notice {
             background: linear-gradient(135deg, rgba(255, 42, 84, 0.25), rgba(255, 123, 0, 0.25));
-            border: 1px solid rgba(255, 42, 84, 0.4);
-            padding: 8px 12px; border-radius: 12px;
-        }
-        .gift-notice .chat-text {
-            font-size: 13px; font-weight: 700; color: #FFF;
+            border: 1px solid rgba(255, 42, 84, 0.4); padding: 8px 12px; border-radius: 12px;
         }
 
-        /* チャット・ギフト操作バー（最下部固定） */
         .action-bar {
-            padding: 10px 12px;
-            background: #1a1a1e;
+            padding: 10px 12px; background: #1a1a1e;
             border-top: 1px solid rgba(255, 255, 255, 0.08);
-            display: flex; gap: 8px; align-items: center;
-            flex-shrink: 0;
+            display: flex; gap: 8px; align-items: center; flex-shrink: 0;
         }
         #chat-input {
             flex: 1; background: rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(255, 255, 255, 0.15);
             padding: 8px 12px; border-radius: 20px;
-            color: #fff; font-size: 13px; outline: none;
-            min-width: 0;
+            color: #fff; font-size: 13px; outline: none; min-width: 0;
         }
-        #chat-input::placeholder { color: rgba(255,255,255,0.35); }
 
         .icon-btn {
             background: transparent; border: none;
@@ -202,32 +150,22 @@
             cursor: pointer; flex-shrink: 0; color: #fff;
         }
         .icon-btn-send { background: #fff; color: #000; }
-        .icon-btn-gift {
-            background: linear-gradient(135deg, #FF2A54, #FF7B00);
-        }
+        .icon-btn-gift { background: linear-gradient(135deg, #FF2A54, #FF7B00); }
 
-        /* ギフトドロワー */
         #gift-drawer {
             display: none; position: fixed; bottom: 65px; right: 12px; width: 300px;
             background: rgba(25, 25, 30, 0.95); border-radius: 20px; padding: 12px;
             border: 1px solid rgba(255, 255, 255, 0.15);
-            grid-template-columns: repeat(2, 1fr); gap: 8px;
-            z-index: 50; backdrop-filter: blur(20px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            grid-template-columns: repeat(2, 1fr); gap: 8px; z-index: 50;
+            backdrop-filter: blur(20px); box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
-        .gift-card {
-            background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 10px;
-            text-align: center; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .gift-card:active { background: rgba(255, 255, 255, 0.15); }
+        .gift-card { background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 10px; text-align: center; cursor: pointer; }
         .gift-icon { font-size: 24px; margin-bottom: 2px; }
         .gift-name { font-size: 11px; font-weight: 700; color: #eee; }
         .gift-price { font-size: 10px; color: #FFB340; font-weight: 700; }
 
-        /* ギフト演出 */
         #effect-container {
-            position: absolute; bottom: 18%; left: 50%;
-            transform: translateX(-50%);
+            position: absolute; bottom: 18%; left: 50%; transform: translateX(-50%);
             z-index: 30; pointer-events: none; text-align: center; width: 100%;
         }
         .gift-effect-text {
@@ -242,7 +180,6 @@
             100% { opacity: 0; transform: scale(0.9) translateY(-20px); }
         }
 
-        /* ニックネーム設定モーダル */
         #name-input-modal {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
@@ -263,28 +200,21 @@
             border-radius: 24px; cursor: pointer; width: 100%;
         }
 
-        /* --- スマホ縦画面レイアウトの最適化 --- */
-        @media (max-width: 768px), (max-aspect-ratio: 1/1) {
+        /* --- モバイル縦画面（Portrait） --- */
+        @media (max-width: 768px) and (orientation: portrait) {
             #app-container { flex-direction: column; }
-            .video-section { flex: 0 0 42vh; height: 42vh; }
-            .side-panel {
-                width: 100% !important;
-                max-width: 100% !important;
-                flex: 1;
-                min-height: 0;
-                border-left: none;
-                border-top: 1px solid rgba(255,255,255,0.08);
-            }
-            .side-panel.collapsed {
-                height: 0 !important;
-                flex: 0 !important;
-            }
-            #gift-drawer {
-                bottom: 70px;
-                right: 12px;
-                left: 12px;
-                width: auto;
-            }
+            .video-section { flex: 0 0 40vh; height: 40vh; }
+            .side-panel { width: 100% !important; max-width: 100% !important; flex: 1; min-height: 0; border-left: none; border-top: 1px solid rgba(255,255,255,0.08); }
+            .side-panel.collapsed { height: 0 !important; flex: 0 !important; }
+            #gift-drawer { bottom: 70px; right: 12px; left: 12px; width: auto; }
+        }
+
+        /* --- モバイル横画面（Landscape）ベストプラクティス：左70% : 右30% --- */
+        @media (max-height: 500px) and (orientation: landscape) {
+            #app-container { flex-direction: row; }
+            .video-section { flex: 0 0 70vw; width: 70vw; height: 100%; }
+            .side-panel { flex: 0 0 30vw; width: 30vw; max-width: 30vw; height: 100%; border-left: 1px solid rgba(255,255,255,0.1); border-top: none; }
+            #gift-drawer { bottom: 65px; right: 12px; width: 280px; }
         }
     </style>
 </head>
@@ -317,7 +247,8 @@
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
             </button>
 
-            <video id="camera-video" autoplay playsinline muted></video>
+            <!-- 視聴者側は muted なし（音声込み即時再生） -->
+            <video id="camera-video" autoplay playsinline></video>
             <div id="effect-container"></div>
         </div>
 
@@ -337,7 +268,7 @@
         </div>
     </div>
 
-    <!-- ギフト選択ドロワー -->
+    <!-- ギフトドロワー -->
     <div id="gift-drawer">
         <div class="gift-card" onclick="sendGift('応援', '📣', '￥500')">
             <div class="gift-icon">📣</div>
@@ -373,9 +304,9 @@
 
     <script>
         const socket = io();
-        let localStream;
-        const peerConnections = {}; // 配信者用: 視聴者ごとの PeerConnection
-        let viewerPeerConnection = null; // 視聴者用: 配信者との PeerConnection
+        let localStream = null;
+        const peerConnections = {};
+        let viewerPeerConnection = null;
 
         let userName = localStorage.getItem('live_user_name') || '';
         let userId = localStorage.getItem('live_user_id');
@@ -407,7 +338,6 @@
             }
         });
 
-        // チャットパネル開閉
         document.getElementById('btn-toggle-chat').addEventListener('click', () => {
             sidePanel.classList.toggle('collapsed');
             const isCollapsed = sidePanel.classList.contains('collapsed');
@@ -420,7 +350,7 @@
             document.getElementById('name-input-modal').style.display = 'flex';
         });
 
-        // 配信ステータス更新
+        // 配信ステータス変更時の制御（即時再生・遮断）
         socket.on('broadcaster-status', (status) => {
             if (isHost) return;
 
@@ -431,21 +361,18 @@
                 liveBadge.classList.add('is-live');
                 socket.emit('request-offer');
             } else {
+                // 停止時は即座に映像・音声を遮断してオーバーレイ表示
+                stopViewerVideo();
                 standbyOverlay.style.display = 'flex';
                 standbyOverlay.style.opacity = '1';
                 liveBadge.innerText = 'OFFLINE';
                 liveBadge.classList.remove('is-live');
                 document.getElementById('standby-title').innerText = status.hasBroadcaster ? "配信準備中" : "配信オフライン";
                 document.getElementById('standby-desc').innerText = status.hasBroadcaster ? "まもなく配信が始まります..." : "配信者が参加するまでお待ちください";
-                
-                if (viewerPeerConnection) {
-                    viewerPeerConnection.close();
-                    viewerPeerConnection = null;
-                }
             }
         });
 
-        // 配信者認証成功時の処理
+        // 配信者の初期処理（プレビュー常時オン）
         socket.on('broadcaster-approved', async (res) => {
             if (res.success) {
                 document.getElementById('role-display').innerText = '配信者';
@@ -454,13 +381,14 @@
                 standbyOverlay.style.display = 'none';
 
                 try {
-                    // カメラ映像を常にプレビュー表示
+                    videoElement.muted = true; // 配信者ローカルはハウリング防止でミュート
                     localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
                     videoElement.srcObject = localStream;
                 } catch (err) {
                     alert("カメラ・マイクの起動エラー: " + err);
                 }
 
+                // 配信開始／停止ボタン処理
                 hostBtn.addEventListener('click', () => {
                     isBroadcasting = !isBroadcasting;
                     socket.emit('toggle-stream', isBroadcasting);
@@ -475,8 +403,8 @@
                         hostBtn.classList.remove('is-live');
                         liveBadge.innerText = 'PREPARE';
                         liveBadge.classList.remove('is-live');
-                        
-                        // 接続をクリア
+
+                        // 配信停止時はすべてのPeerConnectionを切断して即座に遮断
                         Object.keys(peerConnections).forEach(id => {
                             peerConnections[id].close();
                             delete peerConnections[id];
@@ -484,7 +412,7 @@
                     }
                 });
 
-                // 視聴者からのOffer要求処理
+                // 視聴者からのOffer要求受付
                 socket.on('request-offer-from', async (viewerId) => {
                     if (!isBroadcasting || !localStream) return;
 
@@ -504,20 +432,14 @@
                     socket.emit('offer', { target: viewerId, offer: offer });
                 });
 
-                // 視聴者からのAnswer受信
                 socket.on('answer', async (data) => {
                     const pc = peerConnections[data.viewerId];
-                    if (pc) {
-                        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-                    }
+                    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
                 });
 
-                // ICE Candidateの受信処理
                 socket.on('candidate', async (data) => {
                     const pc = peerConnections[data.senderId];
-                    if (pc) {
-                        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-                    }
+                    if (pc) await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
                 });
 
             } else {
@@ -526,7 +448,7 @@
             }
         });
 
-        // 視聴者モード初期化
+        // 視聴者モード設定
         function initViewerMode() {
             if (!userName) {
                 document.getElementById('name-input-modal').style.display = 'flex';
@@ -540,24 +462,40 @@
             userName = input || 'ゲスト' + Math.floor(Math.random() * 1000);
             localStorage.setItem('live_user_name', userName);
             document.getElementById('name-input-modal').style.display = 'none';
+            
+            // ユーザー操作イベント（タップ）内で一度playを実施し、ブラウザの音声再生ブロックを解除
+            videoElement.play().catch(() => {});
             startViewer();
         });
 
         function startViewer() {
             document.getElementById('role-display').innerText = userName;
             document.getElementById('user-id-display').innerText = userId;
-            videoElement.muted = false;
+            videoElement.muted = false; // 音声を聞くためにミュート解除
             socket.emit('request-offer');
         }
 
-        // 視聴者側 WebRTC 受信処理
+        function stopViewerVideo() {
+            if (viewerPeerConnection) {
+                viewerPeerConnection.close();
+                viewerPeerConnection = null;
+            }
+            if (videoElement.srcObject) {
+                const tracks = videoElement.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                videoElement.srcObject = null;
+            }
+        }
+
+        // WebRTC 受信処理（Offer受信時に即時トラックを割り当てて再生）
         socket.on('offer', async (data) => {
-            if (viewerPeerConnection) viewerPeerConnection.close();
-            
+            stopViewerVideo();
+
             viewerPeerConnection = new RTCPeerConnection(rtcConfig);
 
             viewerPeerConnection.ontrack = (e) => {
                 videoElement.srcObject = e.streams[0];
+                videoElement.play().catch(err => console.log("再生自動ブロック回避用:", err));
             };
 
             viewerPeerConnection.onicecandidate = (e) => {
@@ -578,7 +516,7 @@
             }
         });
 
-        // チャット送信
+        // チャット送信機能
         const chatInput = document.getElementById('chat-input');
         const sendBtn = document.getElementById('btn-send-chat');
 
@@ -634,9 +572,7 @@
                 user: senderName, 
                 userId: isHost ? '' : userId, 
                 isHost: isHost,
-                giftName, 
-                icon, 
-                price 
+                giftName, icon, price 
             });
         }
 

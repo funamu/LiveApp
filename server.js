@@ -37,16 +37,16 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 配信ON/OFFの切替
+    // 配信開始・停止のトグル切替
     socket.on('toggle-stream', (status) => {
         if (socket.id === currentBroadcaster) {
             isBroadcasting = status;
             io.emit('broadcaster-status', { hasBroadcaster: true, isBroadcasting });
-            console.log('配信ステータス変更:', isBroadcasting ? '配信中' : '準備中');
+            console.log('配信ステータス変更:', isBroadcasting ? '配信中' : '停止中');
         }
     });
 
-    // WebRTC 1:N シグナリングルーティング
+    // WebRTC シグナリング
     socket.on('request-offer', () => {
         if (currentBroadcaster && isBroadcasting) {
             io.to(currentBroadcaster).emit('request-offer-from', socket.id);
@@ -54,7 +54,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('offer', (data) => {
-        // data: { target, offer }
         if (data.target) {
             io.to(data.target).emit('offer', {
                 broadcasterId: socket.id,
@@ -64,7 +63,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('answer', (data) => {
-        // data: { target, answer }
         if (data.target) {
             io.to(data.target).emit('answer', {
                 viewerId: socket.id,
@@ -74,7 +72,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('candidate', (data) => {
-        // data: { target, candidate }
         if (data.target) {
             io.to(data.target).emit('candidate', {
                 senderId: socket.id,
