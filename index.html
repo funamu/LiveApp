@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ライブ配信プロトタイプ</title>
+    <!-- Socket.IOのライブラリ読み込み -->
     <script src="/socket.io/socket.io.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -37,7 +38,7 @@
             object-fit: contain; background: #000;
         }
 
-        /* 待機用オーバーレイ */
+        /* 待機用画面（オーバーレイ） */
         #standby-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.9);
@@ -48,7 +49,7 @@
         #standby-overlay h3 { margin: 0; font-size: 20px; font-weight: 600; }
         #standby-overlay p { margin: 0; font-size: 13px; color: #8e8e93; }
 
-        /* ヘッダーコントロール */
+        /* 上部の情報表示エリア */
         .video-header-overlay {
             position: absolute; top: 12px; left: 12px; right: 12px;
             display: flex; justify-content: space-between; align-items: center;
@@ -101,7 +102,7 @@
             transition: transform 0.2s;
         }
 
-        /* --- サイドパネル --- */
+        /* --- サイドパネル（チャット画面） --- */
         .side-panel {
             width: 320px; max-width: 32vw; height: 100%;
             background: #121215; border-left: 1px solid rgba(255,255,255,0.08);
@@ -180,6 +181,7 @@
             100% { opacity: 0; transform: scale(0.9) translateY(-20px); }
         }
 
+        /* ニックネーム設定モーダル（ポップアップ） */
         #name-input-modal {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
@@ -200,7 +202,7 @@
             border-radius: 24px; cursor: pointer; width: 100%;
         }
 
-        /* --- モバイル縦画面（Portrait） --- */
+        /* スマホ縦向き用のデザイン調整 */
         @media (max-width: 768px) and (orientation: portrait) {
             #app-container { flex-direction: column; }
             .video-section { flex: 0 0 40vh; height: 40vh; }
@@ -209,7 +211,7 @@
             #gift-drawer { bottom: 70px; right: 12px; left: 12px; width: auto; }
         }
 
-        /* --- モバイル横画面（Landscape）ベストプラクティス：左70% : 右30% --- */
+        /* スマホ横向き用のデザイン調整 */
         @media (max-height: 500px) and (orientation: landscape) {
             #app-container { flex-direction: row; }
             .video-section { flex: 0 0 70vw; width: 70vw; height: 100%; }
@@ -221,13 +223,15 @@
 <body>
 
     <div id="app-container">
-        <!-- 映像エリア -->
+        <!-- 映像表示エリア -->
         <div class="video-section">
+            <!-- 待機画面 -->
             <div id="standby-overlay">
                 <h3 id="standby-title">配信準備中</h3>
                 <p id="standby-desc">配信者が準備を開くのをお待ちください...</p>
             </div>
 
+            <!-- ヘッダーオーバーレイ -->
             <div class="video-header-overlay">
                 <div class="header-info">
                     <span class="live-badge" id="live-badge">OFFLINE</span>
@@ -247,12 +251,12 @@
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
             </button>
 
-            <!-- 視聴者側は muted なし（音声込み即時再生） -->
+            <!-- 動画タグ（視聴者は音声を聞くため muted はつけない） -->
             <video id="camera-video" autoplay playsinline></video>
             <div id="effect-container"></div>
         </div>
 
-        <!-- サイドパネル：チャット＆ギフト -->
+        <!-- チャット＆ギフトのサイドパネル -->
         <div class="side-panel" id="side-panel">
             <div id="chat-logs"></div>
 
@@ -268,7 +272,7 @@
         </div>
     </div>
 
-    <!-- ギフトドロワー -->
+    <!-- ギフト選択ウィンドウ -->
     <div id="gift-drawer">
         <div class="gift-card" onclick="sendGift('応援', '📣', '￥500')">
             <div class="gift-icon">📣</div>
@@ -292,7 +296,7 @@
         </div>
     </div>
 
-    <!-- ニックネーム設定モーダル -->
+    <!-- ニックネーム設定用の画面（モーダル） -->
     <div id="name-input-modal" style="display: none;">
         <div class="modal-card">
             <h3 style="margin:0 0 6px 0; font-size:16px;">ニックネームの設定</h3>
@@ -308,6 +312,7 @@
         const peerConnections = {};
         let viewerPeerConnection = null;
 
+        // ブラウザのローカルストレージ（保存領域）からユーザー名とIDを取得
         let userName = localStorage.getItem('live_user_name') || '';
         let userId = localStorage.getItem('live_user_id');
         if (!userId) {
@@ -318,6 +323,7 @@
         let isHost = false;
         let isBroadcasting = false;
 
+        // WebRTCの接続に必要なGoogleのSTUNサーバー（接続補助）設定
         const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
         const videoElement = document.getElementById('camera-video');
         const standbyOverlay = document.getElementById('standby-overlay');
@@ -326,9 +332,11 @@
         const sidePanel = document.getElementById('side-panel');
         const quickGiftBtn = document.getElementById('btn-quick-gift');
 
+        // URLパラメータ（?host=secret123）から配信者かどうか判別
         const urlParams = new URLSearchParams(window.location.search);
         const hostKey = urlParams.get('host');
 
+        // ページ読み込み完了時の処理
         window.addEventListener('DOMContentLoaded', () => {
             if (hostKey) {
                 isHost = true;
@@ -338,30 +346,33 @@
             }
         });
 
+        // チャット画面の開閉ボタン
         document.getElementById('btn-toggle-chat').addEventListener('click', () => {
             sidePanel.classList.toggle('collapsed');
             const isCollapsed = sidePanel.classList.contains('collapsed');
             quickGiftBtn.style.display = isCollapsed ? 'flex' : 'none';
         });
 
+        // 名前の変更ボタン
         document.getElementById('btn-edit-name').addEventListener('click', () => {
             if (isHost) return;
             document.getElementById('username-input').value = userName;
             document.getElementById('name-input-modal').style.display = 'flex';
         });
 
-        // 配信ステータス変更時の制御（即時再生・遮断）
+        // --- サーバーから配信状況の更新を受け取る ---
         socket.on('broadcaster-status', (status) => {
-            if (isHost) return;
+            if (isHost) return; // 配信者なら何もしない
 
             if (status.hasBroadcaster && status.isBroadcasting) {
+                // 配信中：待機画面を消して映像をリクエスト
                 standbyOverlay.style.opacity = '0';
                 setTimeout(() => standbyOverlay.style.display = 'none', 300);
                 liveBadge.innerText = 'LIVE';
                 liveBadge.classList.add('is-live');
                 socket.emit('request-offer');
             } else {
-                // 停止時は即座に映像・音声を遮断してオーバーレイ表示
+                // 配信停止中：映像を切断して待機画面を表示
                 stopViewerVideo();
                 standbyOverlay.style.display = 'flex';
                 standbyOverlay.style.opacity = '1';
@@ -372,7 +383,7 @@
             }
         });
 
-        // 配信者の初期処理（プレビュー常時オン）
+        // --- 配信者専用の初期化処理 ---
         socket.on('broadcaster-approved', async (res) => {
             if (res.success) {
                 document.getElementById('role-display').innerText = '配信者';
@@ -381,14 +392,16 @@
                 standbyOverlay.style.display = 'none';
 
                 try {
-                    videoElement.muted = true; // 配信者ローカルはハウリング防止でミュート
+                    // 自分の声がスピーカーから出ないようにミュートにする（ハウリング防止）
+                    videoElement.muted = true;
+                    // カメラとマイクを取得してプレビュー表示
                     localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
                     videoElement.srcObject = localStream;
                 } catch (err) {
                     alert("カメラ・マイクの起動エラー: " + err);
                 }
 
-                // 配信開始／停止ボタン処理
+                // 「配信開始／停止」ボタンが押されたときの切り替え処理
                 hostBtn.addEventListener('click', () => {
                     isBroadcasting = !isBroadcasting;
                     socket.emit('toggle-stream', isBroadcasting);
@@ -404,7 +417,7 @@
                         liveBadge.innerText = 'PREPARE';
                         liveBadge.classList.remove('is-live');
 
-                        // 配信停止時はすべてのPeerConnectionを切断して即座に遮断
+                        // 配信停止時：視聴者との接続をすべて切断
                         Object.keys(peerConnections).forEach(id => {
                             peerConnections[id].close();
                             delete peerConnections[id];
@@ -412,13 +425,14 @@
                     }
                 });
 
-                // 視聴者からのOffer要求受付
+                // 視聴者から「配信データがほしい」というリクエスト（request-offer）が来た時
                 socket.on('request-offer-from', async (viewerId) => {
                     if (!isBroadcasting || !localStream) return;
 
                     const pc = new RTCPeerConnection(rtcConfig);
                     peerConnections[viewerId] = pc;
 
+                    // カメラとマイクのトラックを接続に追加
                     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
                     pc.onicecandidate = (e) => {
@@ -448,33 +462,38 @@
             }
         });
 
-        // 視聴者モード設定
+        // --- 視聴者モードの初期化 ---
         function initViewerMode() {
             if (!userName) {
+                // 名前が未設定なら設定画面を表示
                 document.getElementById('name-input-modal').style.display = 'flex';
             } else {
                 startViewer();
             }
         }
 
+        // 「保存して参加」ボタンが押されたとき
         document.getElementById('btn-save-name').addEventListener('click', () => {
             const input = document.getElementById('username-input').value.trim();
             userName = input || 'ゲスト' + Math.floor(Math.random() * 1000);
             localStorage.setItem('live_user_name', userName);
             document.getElementById('name-input-modal').style.display = 'none';
             
-            // ユーザー操作イベント（タップ）内で一度playを実施し、ブラウザの音声再生ブロックを解除
+            // 重要：ユーザーがボタンを押したこの瞬間を利用してダミー再生を実施！
+            // これによりブラウザの「自動音声再生ブロック」を解除できます
             videoElement.play().catch(() => {});
+            
             startViewer();
         });
 
         function startViewer() {
             document.getElementById('role-display').innerText = userName;
             document.getElementById('user-id-display').innerText = userId;
-            videoElement.muted = false; // 音声を聞くためにミュート解除
+            videoElement.muted = false; // 視聴者は音声を聞くのでミュート解除
             socket.emit('request-offer');
         }
 
+        // 映像の再生を安全に停止する関数
         function stopViewerVideo() {
             if (viewerPeerConnection) {
                 viewerPeerConnection.close();
@@ -487,15 +506,17 @@
             }
         }
 
-        // WebRTC 受信処理（Offer受信時に即時トラックを割り当てて再生）
+        // --- 配信者からの映像（WebRTC）を受け取る処理 ---
         socket.on('offer', async (data) => {
             stopViewerVideo();
 
             viewerPeerConnection = new RTCPeerConnection(rtcConfig);
 
+            // 映像・音声データが送られてきた時
             viewerPeerConnection.ontrack = (e) => {
                 videoElement.srcObject = e.streams[0];
-                videoElement.play().catch(err => console.log("再生自動ブロック回避用:", err));
+                // 事前にボタンタップ（ユーザー操作）が完了しているためスムーズに再生される
+                videoElement.play().catch(err => console.log("再生自動ブロックのログ:", err));
             };
 
             viewerPeerConnection.onicecandidate = (e) => {
@@ -516,7 +537,7 @@
             }
         });
 
-        // チャット送信機能
+        // --- チャット機能の処理 ---
         const chatInput = document.getElementById('chat-input');
         const sendBtn = document.getElementById('btn-send-chat');
 
@@ -536,6 +557,7 @@
         sendBtn.addEventListener('click', triggerSendChat);
         chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') triggerSendChat(); });
 
+        // 送られてきたチャットメッセージを画面に追加
         socket.on('receive-chat', (data) => {
             const logs = document.getElementById('chat-logs');
             const div = document.createElement('div');
@@ -553,10 +575,10 @@
                 <div class="chat-text">${data.text}</div>
             `;
             logs.appendChild(div);
-            logs.scrollTop = logs.scrollHeight;
+            logs.scrollTop = logs.scrollHeight; // 自動スクロール
         });
 
-        // ギフト処理
+        // --- ギフト機能の処理 ---
         const giftDrawer = document.getElementById('gift-drawer');
         const toggleGiftDrawer = () => {
             giftDrawer.style.display = (giftDrawer.style.display === 'grid') ? 'none' : 'grid';
@@ -576,6 +598,7 @@
             });
         }
 
+        // 送られてきたギフト情報を画面に演出表示
         socket.on('receive-gift', (data) => {
             showGiftEffect(data);
             
@@ -598,6 +621,7 @@
             logs.scrollTop = logs.scrollHeight;
         });
 
+        // 画面中央にポップアップ表示されるギフト演出アニメーション
         function showGiftEffect(data) {
             const container = document.getElementById('effect-container');
             const div = document.createElement('div');
