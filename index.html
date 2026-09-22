@@ -181,7 +181,7 @@
             100% { opacity: 0; transform: scale(0.9) translateY(-20px); }
         }
 
-        /* ニックネーム設定モーダル（ポップアップ） */
+        /* ニックネーム設定用の画面（モーダル） */
         #name-input-modal {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
@@ -384,11 +384,12 @@
 
                 try {
                     videoElement.muted = true;
-                    // 標準設定でカメラ・マイクを取得（facingModeの厳密エラー回避）
+                    // 標準設定でカメラ・マイクを取得
                     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                     videoElement.srcObject = localStream;
                 } catch (err) {
                     alert("カメラ・マイクの起動エラー: " + err);
+                    return;
                 }
 
                 hostBtn.addEventListener('click', () => {
@@ -406,6 +407,7 @@
                         liveBadge.innerText = 'PREPARE';
                         liveBadge.classList.remove('is-live');
 
+                        // 配信停止時はすべての PeerConnection を閉じる
                         Object.keys(peerConnections).forEach(id => {
                             peerConnections[id].close();
                             delete peerConnections[id];
@@ -413,33 +415,61 @@
                     }
                 });
 
+                // 途中で入ってきた視聴者から Offer リクエストを受けた時の処理
                 socket.on('request-offer-from', async (viewerId) => {
                     if (!isBroadcasting || !localStream) return;
+
+                    // 古い PeerConnection が残っていれば破棄
+                    if (peerConnections[viewerId]) {
+                        peerConnections[viewerId].close();
+                        delete peerConnections[viewerId];
+                    }
 
                     const pc = new RTCPeerConnection(rtcConfig);
                     peerConnections[viewerId] = pc;
 
-                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                    // 1. トラック（映像・音声）を PeerConnection に追加
+                    localStream.getTracks().forEach(track => {
+                        pc.addTrack(track, localStream);
+                    });
 
+                    // 2. ICE Candidate の送信設定
                     pc.onicecandidate = (e) => {
                         if (e.candidate) {
                             socket.emit('candidate', { target: viewerId, candidate: e.candidate });
                         }
                     };
 
-                    const offer = await pc.createOffer();
-                    await pc.setLocalDescription(offer);
-                    socket.emit('offer', { target: viewerId, offer: offer });
+                    // 3. 接続状態の監視（切断時の自動後始末）
+                    pc.oniceconnectionstatechange = () => {
+                        if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
+                            pc.close();
+                            delete peerConnections[viewerId];
+                        }
+                    };
+
+                    // 4. Offer を作成して対象の視聴者へ送信
+                    try {
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+                        socket.emit('offer', { target: viewerId, offer: offer });
+                    } catch (err) {
+                        console.error("Offer作成エラー:", err);
+                    }
                 });
 
                 socket.on('answer', async (data) => {
                     const pc = peerConnections[data.viewerId];
-                    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    if (pc && pc.signalingState !== 'closed') {
+                        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    }
                 });
 
                 socket.on('candidate', async (data) => {
                     const pc = peerConnections[data.senderId];
-                    if (pc) await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    if (pc && pc.signalingState !== 'closed') {
+                        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    }
                 });
 
             } else {
@@ -499,7 +529,7 @@
                 const playPromise = videoElement.play();
                 if (playPromise !== undefined) {
                     playPromise.catch(err => {
-                        console.log("自動再生が制限されたためミュート再生へ移行:", err);
+                        console.log("自動再生制限のためミュート再生へ移行:", err);
                         videoElement.muted = true;
                         videoElement.play();
                     });
