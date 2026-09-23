@@ -24,7 +24,6 @@
             overflow: hidden;
         }
 
-        /* --- 映像エリア --- */
         .video-section {
             position: relative;
             flex: 1; height: 100%; width: 100%;
@@ -36,11 +35,10 @@
 
         #camera-video {
             width: 100%; height: 100%;
-            object-fit: contain; /* 黒枠を出さずに画面全面に広げたい場合は cover に変更してください */
+            object-fit: contain;
             background: #000;
         }
 
-        /* 待機用画面（オーバーレイ） */
         #standby-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.9);
@@ -51,7 +49,16 @@
         #standby-overlay h3 { margin: 0; font-size: 20px; font-weight: 600; }
         #standby-overlay p { margin: 0; font-size: 13px; color: #8e8e93; }
 
-        /* 上部の情報表示エリア */
+        /* 音声再生用（ミュート解除用）のポップアップボタン */
+        #unmute-banner {
+            display: none;
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 42, 84, 0.9); color: white;
+            padding: 10px 18px; border-radius: 20px; font-size: 13px; font-weight: 700;
+            z-index: 20; cursor: pointer; backdrop-filter: blur(8px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
         .video-header-overlay {
             position: absolute; top: 12px; left: 12px; right: 12px;
             display: flex; justify-content: space-between; align-items: center;
@@ -104,7 +111,6 @@
             transition: transform 0.2s;
         }
 
-        /* --- サイドパネル（チャット画面） --- */
         .side-panel {
             width: 320px; max-width: 32vw; height: 100%;
             background: #121215; border-left: 1px solid rgba(255,255,255,0.08);
@@ -184,7 +190,6 @@
             100% { opacity: 0; transform: scale(0.9) translateY(-20px); }
         }
 
-        /* ニックネーム設定モーダル */
         #name-input-modal {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
@@ -205,20 +210,14 @@
             border-radius: 24px; cursor: pointer; width: 100%;
         }
 
-        /* スマホ向け縦画面レイアウト */
         @media (max-width: 768px) and (orientation: portrait) {
             #app-container { flex-direction: column; }
             .video-section { flex: 1; height: auto; }
             .side-panel { width: 100% !important; max-width: 100% !important; flex: 0 0 45vh; height: 45vh; border-left: none; border-top: 1px solid rgba(255,255,255,0.08); }
-            
-            .side-panel.collapsed {
-                height: 0 !important; max-height: 0 !important; min-height: 0 !important; flex: 0 !important;
-                border-top: none;
-            }
+            .side-panel.collapsed { height: 0 !important; max-height: 0 !important; min-height: 0 !important; flex: 0 !important; border-top: none; }
             #gift-drawer { bottom: 70px; right: 12px; left: 12px; width: auto; }
         }
 
-        /* スマホ向け横画面レイアウト */
         @media (max-height: 500px) and (orientation: landscape) {
             #app-container { flex-direction: row; }
             .video-section { flex: 1; height: 100%; }
@@ -236,6 +235,9 @@
                 <h3 id="standby-title">配信準備中</h3>
                 <p id="standby-desc">配信者が準備を開くのをお待ちください...</p>
             </div>
+
+            <!-- 音声ミュート解除通知バナー -->
+            <div id="unmute-banner" onclick="unmuteVideo()">🔊 タップして音声を再生</div>
 
             <div class="video-header-overlay">
                 <div class="header-info">
@@ -331,6 +333,7 @@
         const hostBtn = document.getElementById('btn-host-toggle');
         const sidePanel = document.getElementById('side-panel');
         const quickGiftBtn = document.getElementById('btn-quick-gift');
+        const unmuteBanner = document.getElementById('unmute-banner');
 
         const urlParams = new URLSearchParams(window.location.search);
         const hostKey = urlParams.get('host');
@@ -387,33 +390,42 @@
                 hostBtn.style.display = 'block';
                 standbyOverlay.style.display = 'none';
 
-                try {
-                    videoElement.muted = true;
-                    // 16:9（ワイド）の高解像度カメラ映像を指定
+                async function startCamera() {
                     localStream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 },
-                            aspectRatio: { ideal: 1.777777778 }
-                        },
+                        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, aspectRatio: { ideal: 1.777777778 } },
                         audio: true
                     });
+                    videoElement.muted = true;
                     videoElement.srcObject = localStream;
+                }
+
+                try {
+                    await startCamera();
                 } catch (err) {
                     alert("カメラ・マイクの起動エラー: " + err);
                     return;
                 }
 
-                hostBtn.addEventListener('click', () => {
+                hostBtn.addEventListener('click', async () => {
                     isBroadcasting = !isBroadcasting;
                     socket.emit('toggle-stream', isBroadcasting);
 
                     if (isBroadcasting) {
+                        if (!localStream) {
+                            await startCamera();
+                        }
                         hostBtn.innerText = '配信停止';
                         hostBtn.classList.add('is-live');
                         liveBadge.innerText = 'LIVE';
                         liveBadge.classList.add('is-live');
                     } else {
+                        // 配信停止時：マイク・カメラのトラックを完全に停止して音声を切断
+                        if (localStream) {
+                            localStream.getTracks().forEach(track => track.stop());
+                            localStream = null;
+                        }
+                        videoElement.srcObject = null;
+
                         hostBtn.innerText = '配信開始';
                         hostBtn.classList.remove('is-live');
                         liveBadge.innerText = 'PREPARE';
@@ -498,9 +510,18 @@
             localStorage.setItem('live_user_name', userName);
             document.getElementById('name-input-modal').style.display = 'none';
             
-            videoElement.play().catch(() => {});
+            unmuteVideo();
             startViewer();
         });
+
+        function unmuteVideo() {
+            videoElement.muted = false;
+            videoElement.play().then(() => {
+                unmuteBanner.style.display = 'none';
+            }).catch(() => {
+                unmuteBanner.style.display = 'block';
+            });
+        }
 
         function startViewer() {
             document.getElementById('role-display').innerText = userName;
@@ -514,7 +535,6 @@
         let retryTimer = null;
         function requestStreamWithRetry() {
             if (retryTimer) clearTimeout(retryTimer);
-            
             socket.emit('request-offer');
 
             retryTimer = setTimeout(() => {
@@ -535,6 +555,7 @@
                 tracks.forEach(track => track.stop());
                 videoElement.srcObject = null;
             }
+            unmuteBanner.style.display = 'none';
         }
 
         socket.on('offer', async (data) => {
@@ -544,15 +565,15 @@
 
             viewerPeerConnection.ontrack = (e) => {
                 videoElement.srcObject = e.streams[0];
-                
                 videoElement.muted = false;
-                const playPromise = videoElement.play();
-                if (playPromise !== undefined) {
-                    playPromise.catch(err => {
-                        videoElement.muted = true;
-                        videoElement.play();
-                    });
-                }
+                
+                videoElement.play().catch(err => {
+                    // 自動再生ポリシーに引っかかった場合は一時的にミュート再生にし、バナーを表示
+                    console.warn("自動再生が制限されたため、ミュートで再生します:", err);
+                    videoElement.muted = true;
+                    videoElement.play();
+                    unmuteBanner.style.display = 'block';
+                });
             };
 
             viewerPeerConnection.onicecandidate = (e) => {
