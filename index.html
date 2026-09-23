@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ライブ配信プロトタイプ</title>
-    <!-- Socket.IOのライブラリ読み込み -->
+
     <script src="/socket.io/socket.io.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -202,7 +202,6 @@
             border-radius: 24px; cursor: pointer; width: 100%;
         }
 
-        /* スマホ縦向き用のデザイン調整 */
         @media (max-width: 768px) and (orientation: portrait) {
             #app-container { flex-direction: column; }
             .video-section { flex: 0 0 40vh; height: 40vh; }
@@ -211,7 +210,6 @@
             #gift-drawer { bottom: 70px; right: 12px; left: 12px; width: auto; }
         }
 
-        /* スマホ横向き用のデザイン調整 */
         @media (max-height: 500px) and (orientation: landscape) {
             #app-container { flex-direction: row; }
             .video-section { flex: 0 0 70vw; width: 70vw; height: 100%; }
@@ -223,15 +221,12 @@
 <body>
 
     <div id="app-container">
-        <!-- 映像表示エリア -->
         <div class="video-section">
-            <!-- 待機画面 -->
             <div id="standby-overlay">
                 <h3 id="standby-title">配信準備中</h3>
                 <p id="standby-desc">配信者が準備を開くのをお待ちください...</p>
             </div>
 
-            <!-- ヘッダーオーバーレイ -->
             <div class="video-header-overlay">
                 <div class="header-info">
                     <span class="live-badge" id="live-badge">OFFLINE</span>
@@ -251,12 +246,10 @@
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
             </button>
 
-            <!-- 動画タグ（自動再生ブロック回避のため muted を初期付与） -->
             <video id="camera-video" autoplay playsinline muted></video>
             <div id="effect-container"></div>
         </div>
 
-        <!-- チャット＆ギフトのサイドパネル -->
         <div class="side-panel" id="side-panel">
             <div id="chat-logs"></div>
 
@@ -272,7 +265,6 @@
         </div>
     </div>
 
-    <!-- ギフト選択ウィンドウ -->
     <div id="gift-drawer">
         <div class="gift-card" onclick="sendGift('応援', '📣', '￥500')">
             <div class="gift-icon">📣</div>
@@ -296,7 +288,6 @@
         </div>
     </div>
 
-    <!-- ニックネーム設定用の画面（モーダル） -->
     <div id="name-input-modal" style="display: none;">
         <div class="modal-card">
             <h3 style="margin:0 0 6px 0; font-size:16px;">ニックネームの設定</h3>
@@ -311,6 +302,7 @@
         let localStream = null;
         const peerConnections = {};
         let viewerPeerConnection = null;
+        let isBroadcastingNow = false;
 
         let userName = localStorage.getItem('live_user_name') || '';
         let userId = localStorage.getItem('live_user_id');
@@ -357,12 +349,16 @@
         socket.on('broadcaster-status', (status) => {
             if (isHost) return;
 
-            if (status.hasBroadcaster && status.isBroadcasting) {
+            isBroadcastingNow = status.hasBroadcaster && status.isBroadcasting;
+
+            if (isBroadcastingNow) {
                 standbyOverlay.style.opacity = '0';
                 setTimeout(() => standbyOverlay.style.display = 'none', 300);
                 liveBadge.innerText = 'LIVE';
                 liveBadge.classList.add('is-live');
-                socket.emit('request-offer');
+                
+                // 配信中なら映像の要求を送信
+                requestStreamWithRetry();
             } else {
                 stopViewerVideo();
                 standbyOverlay.style.display = 'flex';
@@ -384,7 +380,6 @@
 
                 try {
                     videoElement.muted = true;
-                    // 標準設定でカメラ・マイクを取得
                     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                     videoElement.srcObject = localStream;
                 } catch (err) {
@@ -407,7 +402,6 @@
                         liveBadge.innerText = 'PREPARE';
                         liveBadge.classList.remove('is-live');
 
-                        // 配信停止時はすべての PeerConnection を閉じる
                         Object.keys(peerConnections).forEach(id => {
                             peerConnections[id].close();
                             delete peerConnections[id];
@@ -415,11 +409,11 @@
                     }
                 });
 
-                // 途中で入ってきた視聴者から Offer リクエストを受けた時の処理
+                // ★【重要】後から入ってきた視聴者からのオファーリクエスト対応
                 socket.on('request-offer-from', async (viewerId) => {
                     if (!isBroadcasting || !localStream) return;
 
-                    // 古い PeerConnection が残っていれば破棄
+                    // すでに接続がある場合は一度閉じてリセットする
                     if (peerConnections[viewerId]) {
                         peerConnections[viewerId].close();
                         delete peerConnections[viewerId];
@@ -428,19 +422,16 @@
                     const pc = new RTCPeerConnection(rtcConfig);
                     peerConnections[viewerId] = pc;
 
-                    // 1. トラック（映像・音声）を PeerConnection に追加
                     localStream.getTracks().forEach(track => {
                         pc.addTrack(track, localStream);
                     });
 
-                    // 2. ICE Candidate の送信設定
                     pc.onicecandidate = (e) => {
                         if (e.candidate) {
                             socket.emit('candidate', { target: viewerId, candidate: e.candidate });
                         }
                     };
 
-                    // 3. 接続状態の監視（切断時の自動後始末）
                     pc.oniceconnectionstatechange = () => {
                         if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
                             pc.close();
@@ -448,7 +439,6 @@
                         }
                     };
 
-                    // 4. Offer を作成して対象の視聴者へ送信
                     try {
                         const offer = await pc.createOffer();
                         await pc.setLocalDescription(offer);
@@ -500,10 +490,30 @@
         function startViewer() {
             document.getElementById('role-display').innerText = userName;
             document.getElementById('user-id-display').innerText = userId;
+            
+            if (isBroadcastingNow) {
+                requestStreamWithRetry();
+            }
+        }
+
+        // ★【改善の要】安全に映像要求をリクエスト（1.5秒後にも映像が届いていなければ再リクエストする安全装置付き）
+        let retryTimer = null;
+        function requestStreamWithRetry() {
+            if (retryTimer) clearTimeout(retryTimer);
+            
             socket.emit('request-offer');
+
+            // 1.5秒経過しても映像がセットされなかった場合、もう一度リクエストする
+            retryTimer = setTimeout(() => {
+                if (isBroadcastingNow && (!videoElement.srcObject || videoElement.paused)) {
+                    console.log("映像が届いていないため、再リクエストを送ります...");
+                    socket.emit('request-offer');
+                }
+            }, 1500);
         }
 
         function stopViewerVideo() {
+            if (retryTimer) clearTimeout(retryTimer);
             if (viewerPeerConnection) {
                 viewerPeerConnection.close();
                 viewerPeerConnection = null;
@@ -524,7 +534,7 @@
             viewerPeerConnection.ontrack = (e) => {
                 videoElement.srcObject = e.streams[0];
                 
-                // 自動再生ブロック回避のための安全な再生処理
+                // 動画の再生を確実に行う
                 videoElement.muted = false;
                 const playPromise = videoElement.play();
                 if (playPromise !== undefined) {
