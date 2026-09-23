@@ -39,6 +39,24 @@
             background: #000;
         }
 
+        /* 視聴開始用エントリーオーバーレイ */
+        #entry-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 60; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            gap: 16px; backdrop-filter: blur(10px);
+            cursor: pointer;
+        }
+        #entry-overlay h2 { margin: 0; font-size: 22px; font-weight: 700; }
+        #entry-overlay p { margin: 0; font-size: 13px; color: #aaa; }
+        .btn-start-view {
+            background: linear-gradient(135deg, #FF2A54, #FF0040);
+            color: white; border: none; padding: 12px 32px;
+            border-radius: 24px; font-weight: 700; font-size: 15px;
+            box-shadow: 0 4px 15px rgba(255, 42, 84, 0.4);
+        }
+
         #standby-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.9);
@@ -48,16 +66,6 @@
         }
         #standby-overlay h3 { margin: 0; font-size: 20px; font-weight: 600; }
         #standby-overlay p { margin: 0; font-size: 13px; color: #8e8e93; }
-
-        /* 音声再生用（ミュート解除用）のポップアップボタン */
-        #unmute-banner {
-            display: none;
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(255, 42, 84, 0.9); color: white;
-            padding: 10px 18px; border-radius: 20px; font-size: 13px; font-weight: 700;
-            z-index: 20; cursor: pointer; backdrop-filter: blur(8px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
 
         .video-header-overlay {
             position: absolute; top: 12px; left: 12px; right: 12px;
@@ -230,14 +238,18 @@
 <body>
 
     <div id="app-container">
+        <!-- 視聴開始オーバーレイ（タップさせて音声権限を取得する） -->
+        <div id="entry-overlay" style="display: none;" onclick="enterStream()">
+            <h2>ライブ配信に参加</h2>
+            <p>タップして視聴を開始します</p>
+            <button class="btn-start-view">視聴を開始する</button>
+        </div>
+
         <div class="video-section">
             <div id="standby-overlay">
                 <h3 id="standby-title">配信準備中</h3>
                 <p id="standby-desc">配信者が準備を開くのをお待ちください...</p>
             </div>
-
-            <!-- 音声ミュート解除通知バナー -->
-            <div id="unmute-banner" onclick="unmuteVideo()">🔊 タップして音声を再生</div>
 
             <div class="video-header-overlay">
                 <div class="header-info">
@@ -258,7 +270,8 @@
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
             </button>
 
-            <video id="camera-video" autoplay playsinline muted></video>
+            <!-- muted属性を解除し、最初から音声を流せる設定にする -->
+            <video id="camera-video" autoplay playsinline></video>
             <div id="effect-container"></div>
         </div>
 
@@ -329,11 +342,11 @@
         const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
         const videoElement = document.getElementById('camera-video');
         const standbyOverlay = document.getElementById('standby-overlay');
+        const entryOverlay = document.getElementById('entry-overlay');
         const liveBadge = document.getElementById('live-badge');
         const hostBtn = document.getElementById('btn-host-toggle');
         const sidePanel = document.getElementById('side-panel');
         const quickGiftBtn = document.getElementById('btn-quick-gift');
-        const unmuteBanner = document.getElementById('unmute-banner');
 
         const urlParams = new URLSearchParams(window.location.search);
         const hostKey = urlParams.get('host');
@@ -395,7 +408,7 @@
                         video: { width: { ideal: 1920 }, height: { ideal: 1080 }, aspectRatio: { ideal: 1.777777778 } },
                         audio: true
                     });
-                    videoElement.muted = true;
+                    videoElement.muted = true; // 配信者本人のスピーカーハウリング防止のため配信者はミュート
                     videoElement.srcObject = localStream;
                 }
 
@@ -500,7 +513,8 @@
             if (!userName) {
                 document.getElementById('name-input-modal').style.display = 'flex';
             } else {
-                startViewer();
+                // すでに名前設定済みの場合でもユーザーのアクション（タップ）を得るためエントリー画面を表示
+                entryOverlay.style.display = 'flex';
             }
         }
 
@@ -510,22 +524,21 @@
             localStorage.setItem('live_user_name', userName);
             document.getElementById('name-input-modal').style.display = 'none';
             
-            unmuteVideo();
+            // 名前入力ボタンを押した行為で音声再生が解禁される
             startViewer();
         });
 
-        function unmuteVideo() {
-            videoElement.muted = false;
-            videoElement.play().then(() => {
-                unmuteBanner.style.display = 'none';
-            }).catch(() => {
-                unmuteBanner.style.display = 'block';
-            });
+        // オーバーレイをタップして視聴開始（音声解除）
+        function enterStream() {
+            entryOverlay.style.display = 'none';
+            startViewer();
         }
 
         function startViewer() {
             document.getElementById('role-display').innerText = userName;
             document.getElementById('user-id-display').innerText = userId;
+            
+            videoElement.muted = false; // 閲覧者はミュートを解除した状態でストリーム要求
             
             if (isBroadcastingNow) {
                 requestStreamWithRetry();
@@ -555,7 +568,6 @@
                 tracks.forEach(track => track.stop());
                 videoElement.srcObject = null;
             }
-            unmuteBanner.style.display = 'none';
         }
 
         socket.on('offer', async (data) => {
@@ -566,13 +578,8 @@
             viewerPeerConnection.ontrack = (e) => {
                 videoElement.srcObject = e.streams[0];
                 videoElement.muted = false;
-                
                 videoElement.play().catch(err => {
-                    // 自動再生ポリシーに引っかかった場合は一時的にミュート再生にし、バナーを表示
-                    console.warn("自動再生が制限されたため、ミュートで再生します:", err);
-                    videoElement.muted = true;
-                    videoElement.play();
-                    unmuteBanner.style.display = 'block';
+                    console.warn("自動再生失敗:", err);
                 });
             };
 
