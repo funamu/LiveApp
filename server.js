@@ -1,6 +1,8 @@
 // 必要なライブラリ（ExpressとSocket.IO）を読み込みます
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -9,13 +11,50 @@ const io = new Server(server, {
     cors: { origin: "*" } // どのページからでも接続を受け許可する設定
 });
 
-// index_3.html などの静的ファイルを配信するための設定
+// index_4.html などの静的ファイルを配信するための設定
 app.use(express.static(__dirname));
 
 // 配信の状態を管理する変数
 let currentBroadcaster = null; // 現在の配信者のSocket ID
 let isBroadcasting = false;    // 配信中かどうか（true: 配信中, false: 停止中）
 const SECRET_HOST_KEY = 'secret123'; // 配信者認証用キー（URLの ?host=secret123 で指定）
+
+// --- チャットログファイル管理 ---
+const LOG_FILE_PATH = path.join(__dirname, 'chat_logs.jsonl');
+const chatHistory = [];
+const MAX_HISTORY = 100; // メモリ上に保持・途中参加者に送信する最大件数
+
+// 起動時に過去のログファイルがあれば読み込む
+if (fs.existsSync(LOG_FILE_PATH)) {
+    try {
+        const fileData = fs.readFileSync(LOG_FILE_PATH, 'utf-8');
+        const lines = fileData.trim().split('\n').filter(Boolean);
+        lines.forEach(line => {
+            chatHistory.push(JSON.parse(line));
+        });
+        // 直近の件数のみ保持
+        if (chatHistory.length > MAX_HISTORY) {
+            chatHistory.splice(0, chatHistory.length - MAX_HISTORY);
+        }
+        console.log(`過去のログファイルを ${lines.length} 件読み込みました。`);
+    } catch (err) {
+        console.error('ログファイルの読み込みエラー:', err);
+    }
+}
+
+// ログ追記用関数
+function saveLogToFile(logData) {
+    chatHistory.push(logData);
+    if (chatHistory.length > MAX_HISTORY) {
+        chatHistory.shift();
+    }
+    
+    // 1行1JSON形式でファイルへ追記
+    const logLine = JSON.stringify(logData) + '\n';
+    fs.appendFile(LOG_FILE_PATH, logLine, (err) => {
+        if (err) console.error('ログの書き込みエラー:', err);
+    });
+}
 
 // クライアント（ブラウザ）が接続してきたときの処理
 io.on('connection', (socket) => {
@@ -26,6 +65,9 @@ io.on('connection', (socket) => {
         hasBroadcaster: !!currentBroadcaster, 
         isBroadcasting: isBroadcasting 
     });
+
+    // 途中参加したユーザーに過去のチャット・ギフト履歴を送信
+    socket.emit('chat-history', chatHistory);
 
     // 2. 配信者としての認証要求を受け取る
     socket.on('register-broadcaster', (key) => {
@@ -95,8 +137,17 @@ io.on('connection', (socket) => {
     });
 
     // --- チャット・ギフト機能 ---
-    socket.on('send-chat', (data) => io.emit('receive-chat', data));
-    socket.on('send-gift', (data) => io.emit('receive-gift', data));
+    socket.on('send-chat', (data) => {
+        const logData = { type: 'chat', timestamp: new Date().toISOString(), ...data };
+        saveLogToFile(logData);
+        io.emit('receive-chat', data);
+    });
+
+    socket.on('send-gift', (data) => {
+        const logData = { type: 'gift', timestamp: new Date().toISOString(), ...data };
+        saveLogToFile(logData);
+        io.emit('receive-gift', data);
+    });
 
     // 接続が切れたときの処理
     socket.on('disconnect', () => {

@@ -601,6 +601,43 @@
             }
         });
 
+        // 過去ログの一括受信・描画処理
+        socket.on('chat-history', (historyList) => {
+            const logs = document.getElementById('chat-logs');
+            logs.innerHTML = ''; // 一旦クリアして重複を防ぐ
+
+            historyList.forEach((data) => {
+                const div = document.createElement('div');
+                const hostBadgeHtml = data.isHost ? `<span class="host-badge">HOST</span>` : '';
+                const idHtml = data.userId ? `<span class="chat-id">${data.userId}</span>` : '';
+
+                if (data.type === 'gift') {
+                    div.className = 'chat-item gift-notice';
+                    div.innerHTML = `
+                        <div class="chat-header">
+                            ${hostBadgeHtml}
+                            <span class="chat-user" style="color: #FFF;">${data.user}</span>
+                            ${idHtml}
+                        </div>
+                        <div class="chat-text">🎁 ${data.icon} ${data.giftName} (${data.price}) を贈りました！</div>
+                    `;
+                } else {
+                    div.className = 'chat-item';
+                    div.innerHTML = `
+                        <div class="chat-header">
+                            ${hostBadgeHtml}
+                            <span class="chat-user">${data.user}</span>
+                            ${idHtml}
+                        </div>
+                        <div class="chat-text">${data.text}</div>
+                    `;
+                }
+                logs.appendChild(div);
+            });
+
+            logs.scrollTop = logs.scrollHeight;
+        });
+
         // チャット送信処理
         const chatInput = document.getElementById('chat-input');
         const sendBtn = document.getElementById('btn-send-chat');
