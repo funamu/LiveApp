@@ -1,10 +1,10 @@
 {
   "live-20260927": {
-    "password": "secret888",
-    "title": "特別ライブ配信"
+    "password": "A123",
+    "title": "live-A"
   },
   "game-20261001": {
-    "password": "pass555",
-    "title": "ゲーム実況配信"
+    "password": "B123",
+    "title": "Live-B"
   }
 }
