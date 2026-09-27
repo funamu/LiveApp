@@ -14,7 +14,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             height: 100%; height: 100dvh;
             overflow: hidden; color: #fff;
-            -webkit-text-size-adjust: 100%; /* スマホの自動フォント拡大を防止 */
+            -webkit-text-size-adjust: 100%;
         }
 
         #app-container {
@@ -144,7 +144,6 @@
         .chat-id { font-size: 9px; color: rgba(255, 255, 255, 0.4); }
         .host-badge { background: #FF2A54; color: #fff; font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 3px; }
         
-        /* チャット文字サイズをスッキリ調整（12px） */
         .chat-text { font-size: 12px; font-weight: 500; color: #ffffff; line-height: 1.4; word-break: break-all; }
 
         .chat-item.gift-notice {
@@ -221,7 +220,6 @@
             border-radius: 20px; cursor: pointer; width: 100%; margin-top: 4px;
         }
 
-        /* スマホ向け縦画面レイアウト調整 */
         @media (max-width: 768px) and (orientation: portrait) {
             #app-container { flex-direction: column; }
             .video-section { flex: 1; height: auto; }
@@ -232,7 +230,7 @@
             }
             .side-panel.collapsed { height: 0 !important; max-height: 0 !important; min-height: 0 !important; flex: 0 !important; border-top: none; }
             #gift-drawer { bottom: 65px; right: 12px; left: 12px; width: auto; }
-            .chat-text { font-size: 11.5px; } /* スマホでのチャット文言サイズ */
+            .chat-text { font-size: 11.5px; }
         }
     </style>
 </head>
@@ -321,7 +319,7 @@
             <h3 style="margin:0 0 4px 0; font-size:15px;">ライブ配信へ参加</h3>
             <p style="font-size: 11px; color: #8e8e93; margin:0;">表示名とパスワードを入力してください</p>
             <input type="text" id="username-input" class="input-field" placeholder="ニックネーム" maxlength="12">
-            <input type="password" id="room-pass-input" class="input-field" placeholder="パスワード（任意/必要な場合）">
+            <input type="password" id="room-pass-input" class="input-field" placeholder="パスワード（入力してください）">
             <button class="btn-primary" id="btn-join-room">参加する</button>
         </div>
     </div>
@@ -345,8 +343,6 @@
         }
 
         let isHost = !!hostKey;
-        let isBroadcasting = false;
-        let isPaused = false;
 
         const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
         const videoElement = document.getElementById('camera-video');
@@ -419,12 +415,13 @@
         }
 
         btnHostStart.addEventListener('click', () => {
-            socket.emit('start-stream', { password: passParam });
+            socket.emit('start-stream');
             btnHostStart.style.display = 'none';
             btnHostPause.style.display = 'inline-block';
             btnHostStop.style.display = 'inline-block';
         });
 
+        let isPaused = false;
         btnHostPause.addEventListener('click', () => {
             isPaused = !isPaused;
             socket.emit('toggle-pause', isPaused);
@@ -622,7 +619,6 @@
             appendChatItem(data);
         });
 
-        // チャット要素追加処理（「undefined」修正済み）
         function appendChatItem(data) {
             const logs = document.getElementById('chat-logs');
             const div = document.createElement('div');
